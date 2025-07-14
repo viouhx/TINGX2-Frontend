@@ -1,0 +1,26 @@
+@media screen and (max-width: 400px) {
+
+  html, body, #root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background-color: #f5fbef;
+}
+
+  #features {
+    padding: 20px;
+    width: 111%;
+  }
+  #about,
+  #services,
+  #testimonials,
+  #team,
+  #contact,
+  #footer {
+    width: 111%;
+  }
+
+  #portfolio {
+    width: 110%;
+  }
+}
