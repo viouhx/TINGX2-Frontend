@@ -1,60 +1,118 @@
+// src/components/navigation.jsx
 import React from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
+import styled from "styled-components";
 
-export const Navigation = ({ isLoggedIn, onLogout }) => {
+export const Navigation = ({ isLoggedIn, onLogout, userName = "사용자님" }) => {
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    onLogout?.();
+    navigate("/login");
+  };
+
   return (
-    <nav id="menu" className="navbar navbar-default navbar-fixed-top">
-      <div className="container">
-        <div className="navbar-header">
-          <button
-            type="button"
-            className="navbar-toggle collapsed"
-            data-toggle="collapse"
-            data-target="#bs-example-navbar-collapse-1"
-          >
-            <span className="sr-only">Toggle navigation</span>
-            <span className="icon-bar"></span>
-            <span className="icon-bar"></span>
-            <span className="icon-bar"></span>
-          </button>
+    <TopBar>
+      <Inner>
+        <Brand to="/main">TINGTING</Brand>
 
-          {/* 로고 / 브랜드 */}
-          <Link to="/" className="navbar-brand page-scroll">
-            CHATBOT
-          </Link>
-        </div>
-
-        <div
-          className="collapse navbar-collapse"
-          id="bs-example-navbar-collapse-1"
-        >
-          <ul className="nav navbar-nav navbar-right">
-            {!isLoggedIn ? (
-              <>
-                <li>
-                  <Link to="/login" className="page-scroll">
-                    로그인
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/signup" className="page-scroll">
-                    회원가입
-                  </Link>
-                </li>
-              </>
-            ) : (
-              <li>
-                <span
-                  style={{ cursor: "pointer", padding: "15px", display: "inline-block" }}
-                  onClick={onLogout}
-                >
-                  로그아웃
-                </span>
-              </li>
-            )}
-          </ul>
-        </div>
-      </div>
-    </nav>
+        <Right>
+          {!isLoggedIn ? (
+            <>
+              <NavLink to="/login">로그인</NavLink>
+              <Divider />
+              <NavLink to="/signup">회원가입</NavLink>
+            </>
+          ) : (
+            <>
+              <Muted>{userName}</Muted>
+              <Divider />
+              <Icon aria-hidden>👤</Icon>
+              <NavLink to="/mypage">마이페이지</NavLink>
+              <Divider />
+              <Icon aria-hidden>↪</Icon>
+              <TextButton onClick={handleLogout}>로그아웃</TextButton>
+            </>
+          )}
+        </Right>
+      </Inner>
+    </TopBar>
   );
 };
+
+/* ===== styles ===== */
+const TopBar = styled.header`
+  position: fixed;
+  inset: 0 0 auto 0;
+  height: 52px;
+  z-index: 1000;
+  background: linear-gradient(90deg, #ffd6ea 0%, #ffc8e0 50%, #ffbfd9 100%);
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+`;
+
+const Inner = styled.div`
+  max-width: 1280px;
+  height: 52px;
+  margin: 0 auto;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+`;
+
+const Brand = styled(Link)`
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-decoration: none;
+  font-size: 20px;
+  text-shadow: 0 2px 8px rgba(0,0,0,.12);
+  &:hover { opacity: .95; }
+`;
+
+const Right = styled.nav`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #fff;
+`;
+
+const NavLink = styled(Link)`
+  color: #fff;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 6px 8px;
+  border-radius: 8px;
+  transition: background .15s ease, opacity .15s ease;
+  &:hover { background: rgba(255,255,255,.14); }
+`;
+
+const TextButton = styled.button`
+  color: #fff;
+  font-weight: 700;
+  padding: 6px 8px;
+  border: 0;
+  background: transparent;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background .15s ease;
+  &:hover { background: rgba(255,255,255,.14); }
+`;
+
+const Divider = styled.span`
+  display: inline-block;
+  width: 1px;
+  height: 16px;
+  background: rgba(255,255,255,.5);
+  margin: 0 2px;
+`;
+
+const Muted = styled.span`
+  opacity: .9;
+  font-weight: 600;
+`;
+
+const Icon = styled.span`
+  opacity: .9;
+  font-size: 14px;
+`;
