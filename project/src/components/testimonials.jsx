@@ -19,6 +19,12 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
   const [intMsgs, setIntMsgs] = useState([]);
   const msgs = useMemo(() => (extMsgs ?? intMsgs), [extMsgs, intMsgs]);
   const setMsgs = useMemo(() => (setExtMsgs ?? setIntMsgs), [setExtMsgs]);
+  const handleKeyDown = (e) => {
+  if (e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();   // 줄바꿈 막기
+    handleSend();         // 전송
+  }
+};
 
   // 최초 AI 인사 메시지
   useEffect(() => {
@@ -125,10 +131,12 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
       </MessagesArea>
 
       <InputBar onSubmit={handleSend}>
+      
         <MsgInput
           placeholder="메시지를 입력하세요..."
           value={input}
           onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
         <SendBtn type="submit" aria-label="전송">✈</SendBtn>
       </InputBar>
@@ -153,6 +161,7 @@ const TOPBAR_H = 52;        // 고정 상단바 높이
 const EXTRA_GAP = 0;        // 필요 시 살짝 띄우고 싶을 때
 const CHAT_HEADER_H = 60;   // 채팅 상단(상대 정보) 높이
 const INPUT_BAR_H   = 64;   // 입력바 높이
+const CONTENT_MAX_W = 1100;
 
 /* ===== styles (grid) ===== */
 const Wrap = styled.section`
@@ -169,6 +178,10 @@ const ChatHeader = styled.header`
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(255,183,213,.35), rgba(255,183,213,.15), #fff 80%);
   border-bottom: 1px solid rgba(0,0,0,.04);
+
+  /* ✅ 가운데 정렬 + 최대폭 제한 */
+  width: min(${CONTENT_MAX_W}px, 96vw);
+  margin: 0 auto;
 `;
 
 const Left = styled.div`
@@ -200,8 +213,12 @@ const Sub = styled.div` font-size: 12px; color: #888; `;
 
 const MessagesArea = styled.div`
   grid-row: 2;
-  overflow-y: auto;               /* 스크롤은 여기서만 */
+  overflow-y: auto;
   padding: 16px 16px 24px;
+
+  /* ✅ 가운데 정렬 + 최대폭 제한 */
+  width: min(${CONTENT_MAX_W}px, 96vw);
+  margin: 0 auto;
 `;
 
 const Row = styled.div`
@@ -260,6 +277,10 @@ const InputBar = styled.form`
   padding: 10px 16px;
   background: #fff;
   border-top: 1px solid rgba(0,0,0,.06);
+
+  /* ✅ 가운데 정렬 + 최대폭 제한 */
+  width: min(${CONTENT_MAX_W}px, 96vw);
+  margin: 0 auto;
 `;
 
 const MsgInput = styled.textarea`
