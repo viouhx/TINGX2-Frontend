@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState } from "react";
 import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { GlobalFonts } from "./styles/global-fonts";
 import { Navigation } from "./components/navigation";
 import { Testimonials } from "./components/testimonials";
 import Ting from "./components/ting";     // ✅ 첫 화면
@@ -68,6 +69,7 @@ function AppInner() {
 export default function App() {
   return (
     <Router>
+      <GlobalFonts />
       <AppInner />
     </Router>
   );

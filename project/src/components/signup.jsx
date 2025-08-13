@@ -17,6 +17,10 @@ const Signup = () => {
   const [emailChecked, setEmailChecked] = useState(false);
   const [nickChecked, setNickChecked] = useState(false);
 
+  // ✅ 이메일 인증 관련
+  const [emailVerifySent, setEmailVerifySent] = useState(false); // 인증 메일 발송됨
+  const [emailVerified, setEmailVerified] = useState(false);     // 인증 완료됨
+
   const [showDone, setShowDone] = useState(false);
 
   // 유효성
@@ -27,9 +31,17 @@ const Signup = () => {
   const birthValid = useMemo(() => birth.trim() !== "", [birth]);
   const genderValid = useMemo(() => gender === "male" || gender === "female", [gender]);
 
-  // 최종 버튼 활성 조건: 모든 필드 채움 + 유효 + 중복확인 클릭 완료
+  // 최종 버튼 활성 조건: 모든 필드 채움 + 유효 + 중복확인 + ✅ 이메일 인증 완료
   const canSubmit =
-    emailValid && nickValid && pwdValid && pwdSame && birthValid && genderValid && emailChecked && nickChecked;
+    emailValid &&
+    nickValid &&
+    pwdValid &&
+    pwdSame &&
+    birthValid &&
+    genderValid &&
+    emailChecked &&
+    nickChecked &&
+    emailVerified;
 
   const handleEmailCheck = () => {
     if (!emailValid) return;
@@ -45,6 +57,22 @@ const Signup = () => {
     alert("사용 가능한 닉네임입니다.");
   };
 
+  // ✅ 인증 메일 보내기
+  const handleSendVerifyEmail = () => {
+    if (!emailChecked || !emailValid) return;
+    // TODO: 실제 인증 메일 발송 API
+    setEmailVerifySent(true);
+    alert("인증 메일을 보냈습니다. 메일함에서 확인 후 '이메일 확인'을 눌러주세요.");
+  };
+
+  // ✅ 메일에서 확인 후 버튼 눌러 인증 완료 처리
+  const handleConfirmEmail = () => {
+    if (!emailVerifySent) return;
+    // TODO: 실제 인증 확인 API (토큰 검증 등)
+    setEmailVerified(true);
+    alert("이메일 인증이 완료되었습니다.");
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!canSubmit) return;
@@ -56,9 +84,17 @@ const Signup = () => {
     }, 1200);
   };
 
-  // 입력이 바뀌면 다시 중복확인 필요
-  const onChangeEmail = (v) => { setEmail(v); setEmailChecked(false); };
-  const onChangeNick = (v) => { setNickname(v); setNickChecked(false); };
+  // 입력이 바뀌면 다시 중복확인/인증 필요
+  const onChangeEmail = (v) => {
+    setEmail(v);
+    setEmailChecked(false);
+    setEmailVerifySent(false);
+    setEmailVerified(false);
+  };
+  const onChangeNick = (v) => {
+    setNickname(v);
+    setNickChecked(false);
+  };
 
   return (
     <Bg>
@@ -93,10 +129,42 @@ const Signup = () => {
           </Hint>
         )}
 
+        {/* ✅ 이메일 인증 흐름 */}
+        {emailChecked && (
+          <>
+            <RightAlign>
+              {!emailVerifySent && !emailVerified && (
+                <SmallBtn type="button" onClick={handleSendVerifyEmail}>
+                  이메일 인증
+                </SmallBtn>
+              )}
+              {emailVerifySent && !emailVerified && (
+                <SmallBtn type="button" onClick={handleConfirmEmail}>
+                  이메일 확인
+                </SmallBtn>
+              )}
+              {emailVerified && (
+                <SmallBtn type="button" disabled>
+                  인증 완료
+                </SmallBtn>
+              )}
+            </RightAlign>
+
+            {!emailVerified && emailVerifySent && (
+              <Hint ok={false}>
+                메일함에서 인증을 완료하신 뒤, 위의 <b>이메일 확인</b> 버튼을 눌러주세요.
+              </Hint>
+            )}
+            {emailVerified && (
+              <Hint ok={true}>이메일 인증이 완료되었습니다.</Hint>
+            )}
+          </>
+        )}
+
         {/* 닉네임 */}
         <Inline>
           <Input
-            placeholder="닉네임"
+            placeholder="닉네임 (2~7자)"
             value={nickname}
             onChange={(e) => onChangeNick(e.target.value)}
           />
@@ -116,7 +184,7 @@ const Signup = () => {
 
         {/* 비밀번호 */}
         <Input
-          placeholder="비밀번호"
+          placeholder="비밀번호 (6자 이상)"
           type="password"
           value={pwd}
           onChange={(e) => setPwd(e.target.value)}
@@ -246,6 +314,12 @@ const SmallBtn = styled.button`
   font-weight: 800;
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
   opacity: ${({ disabled }) => (disabled ? 0.5 : 1)};
+`;
+
+const RightAlign = styled.div`
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 8px;
 `;
 
 const Hint = styled.div`

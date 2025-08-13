@@ -3,6 +3,19 @@ import React, { useMemo, useState } from "react";
 import styled from "styled-components";
 import { useNavigate } from "react-router-dom";
 
+/* =========================
+   랜딩 페이지에서 쓸 외부 링크 (여기만 바꾸면 됨)
+   ========================= */
+const LINKS = {
+  mbti: "https://www.16personalities.com/ko",       // TODO: MBTI 테스트 링크로 교체
+  loveStyle: "https://smore.im/quiz/F9mbcorgGH",  // TODO: 연애스타일 테스트 링크로 교체
+  etiquette: "https://blog.naver.com/rizzlines/223684632366",  // TODO: 소개팅 매너 가이드 링크로 교체
+  video: "https://www.youtube.com/watch?v=mYoXYhX7tes",      // TODO: 소개팅 대화법 영상(Youtube) 링크로 교체
+};
+
+/* =========================
+   기존 모달(마법사) 데이터
+   ========================= */
 const JOBS = [
   "회사원","공무원","의사","간호사","교사","개발자","디자이너","마케터","영업","자영업",
   "학생","변호사","약사","회계사","금융","컨설턴트","연구원","데이터사이언티스트","PD","작가"
@@ -10,12 +23,12 @@ const JOBS = [
 const TALK_STYLES = ["리드형","수다쟁이","차분한","조용한","유머러스","진지한","감성적","논리적","다정한","솔직한","친근한","정중한"];
 const TRAITS = ["유머","진지","활발","감성적","이성적","외향적","내향적","낙천적","신중한","열정적","친화적","독립적","배려심","창의적","현실적"];
 const HOBBIES = ["영화","음악","운동","독서","여행","요리","게임","드라마","패션","미술","사진","댄스","카페","맛집","술","커피","반려동물","자동차"];
-
 const TOTAL_STEPS = 7; // 0~6
 
 export default function Main() {
   const navigate = useNavigate();
 
+  /* ===== 모달 상태 ===== */
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState("wizard"); // 'wizard' | 'review'
   const [step, setStep] = useState(0);
@@ -100,20 +113,142 @@ export default function Main() {
     <Bg>
       <Header>TINGTING</Header>
 
-      <IntroCard>
-        <Heart>♡</Heart>
-        <IntroTitle>AI 소개팅 시뮬레이션</IntroTitle>
-        <IntroDesc>
-          안녕하세요, 사용자님!
-          <br />
-          원하는 상대방의 조건을 설정하고 AI와 채팅을 시작해보세요
-        </IntroDesc>
-        <Primary onClick={onOpen}>상대방 조건 설정하기</Primary>
-      </IntroCard>
+      {/* ======= 랜딩 Hero ======= */}
+      <Container>
+        <Hero>
+          <HeroTitle>안녕하세요, 사용자님! <i>💞</i></HeroTitle>
+          <HeroSub>오늘도 새로운 인연과 만날 준비가 되셨나요?</HeroSub>
+          <HeroCta onClick={onOpen}>➕ 새로운 소개팅 시작하기</HeroCta>
+        </Hero>
 
+        {/* 사용법 4단계 */}
+        <Card>
+          <CardHead>
+            <HeadIcon>🔔</HeadIcon>
+            <h3>TingTing 사용법</h3>
+          </CardHead>
+          <StepsGrid>
+            <StepItem>
+              <Num>1</Num>
+              <StepTitle>조건 설정</StepTitle>
+              <StepDesc>원하는 상대방의 나이, 성격, 관심사 등을 설정해보세요</StepDesc>
+            </StepItem>
+            <StepItem>
+              <Num>2</Num>
+              <StepTitle>AI 채팅</StepTitle>
+              <StepDesc>설정한 조건에 맞는 AI와 자연스럽게 대화해봐요</StepDesc>
+            </StepItem>
+            <StepItem>
+              <Num>3</Num>
+              <StepTitle>분석 확인</StepTitle>
+              <StepDesc>대화 내용을 AI가 분석한 결과를 확인해요</StepDesc>
+            </StepItem>
+            <StepItem>
+              <Num>4</Num>
+              <StepTitle>실력 향상</StepTitle>
+              <StepDesc>피드백을 바탕으로 대화 스킬을 조금씩 높여요</StepDesc>
+            </StepItem>
+          </StepsGrid>
+        </Card>
+
+        {/* 2열: 왼쪽(특별함) / 오른쪽(꿀팁 & 링크) */}
+        <TwoCol>
+          <Card>
+            <CardHead>
+              <HeadIcon>✨</HeadIcon>
+              <h3>TingTing만의 특별함</h3>
+            </CardHead>
+            <Bullets>
+              <li><b>AI 맞춤 대화</b><span> · 원하는 조건의 상대와 자연스러운 대화</span></li>
+              <li><b>정밀한 분석</b><span> · 대화 스타일과 매력 포인트를 AI가 분석</span></li>
+              <li><b>성장 피드백</b><span> · 개선점과 장점을 구체적으로 제시</span></li>
+              <li><b>실전 연습</b><span> · 부담 없이 스킬을 향상시키는 안전한 연습</span></li>
+            </Bullets>
+          </Card>
+
+          <Card>
+            <CardHead>
+              <HeadIcon>🧠</HeadIcon>
+              <h3>소개팅 꿀팁 & 유용한 링크</h3>
+            </CardHead>
+
+            <Tips>
+              <TipBox>
+                <TipTitle>대화 시작하기</TipTitle>
+                <TipText>프로필을 보고 구체적인 질문으로 자연스럽게 시작해보세요.</TipText>
+              </TipBox>
+              <TipBox>
+                <TipTitle>경청의 기술</TipTitle>
+                <TipText>상대 말에 “맞아요, 저도 그렇게 생각해요” 같은 공감표현을 섞어보세요.</TipText>
+              </TipBox>
+              <TipBox>
+                <TipTitle>질문의 기술</TipTitle>
+                <TipText>예/아니오로 끝나는 질문보다 경험을 꺼내는 열린 질문이 좋아요.</TipText>
+              </TipBox>
+            </Tips>
+
+            <Links>
+              <li><a href={LINKS.mbti} target="_blank" rel="noreferrer">🔗 MBTI 성격유형 테스트</a></li>
+              <li><a href={LINKS.loveStyle} target="_blank" rel="noreferrer">🔗 연애스타일 테스트</a></li>
+              <li><a href={LINKS.etiquette} target="_blank" rel="noreferrer">🔗 소개팅 매너 가이드</a></li>
+              <li><a href={LINKS.video} target="_blank" rel="noreferrer">🔗 소개팅 대화법 영상 (YouTube)</a></li>
+            </Links>
+          </Card>
+        </TwoCol>
+
+        {/* 하단 3특징 */}
+        <Features3>
+          <FeatureCard>
+            <FeatIcon>🛡️</FeatIcon>
+            <FeatTitle>안전한 연습 환경</FeatTitle>
+            <FeatText>실제 상황에 대한 부담 없이 편안하게 스킬을 연습해요.</FeatText>
+          </FeatureCard>
+          <FeatureCard>
+            <FeatIcon>⚡</FeatIcon>
+            <FeatTitle>즉시 피드백</FeatTitle>
+            <FeatText>AI가 결과를 바로 분석해 개선점을 파악할 수 있어요.</FeatText>
+          </FeatureCard>
+          <FeatureCard>
+            <FeatIcon>🎯</FeatIcon>
+            <FeatTitle>맞춤형 상대방</FeatTitle>
+            <FeatText>원하는 조건의 상대와 대화하며 다양한 상황에 대비해요.</FeatText>
+          </FeatureCard>
+        </Features3>
+
+        {/* Footer */}
+        <Footer>
+          <FootCols>
+            <div>
+              <Brand>TingTing</Brand>
+              <Small>AI 기술로 완성하는<br/>스마트한 소개팅 시뮬레이션 서비스</Small>
+              <Copy>© 2025 TingTing. All rights reserved.</Copy>
+            </div>
+
+            <div>
+              <FootTitle>Contact</FootTitle>
+              <Small>📞 010-4709-2597</Small>
+              <Small>✉ asb0729@naver.com</Small>
+              <Small>📍 뉴욕 자유의 여신상 앞 벤치</Small>
+              <Small>🕘 평일 09:00 ~ 18:00 (주말/공휴일 휴무)</Small>
+            </div>
+
+            <div>
+              <FootTitle>관리자 정보</FootTitle>
+              <Small>웹 서비스 담당자: 안승빈</Small>
+              <Small>백엔드 담당자: 조건호</Small>
+              <Small>데이터베이스 관리자: 전준영</Small>
+              <Small style={{opacity:.8, marginTop:6}}>
+                문의사항이 있으면 언제든지 연락주세요.
+              </Small>
+            </div>
+          </FootCols>
+        </Footer>
+      </Container>
+
+      {/* ======= 기존 모달(마법사 & 리뷰) 그대로 ======= */}
       {open && (
         <Overlay onClick={onClose}>
-          {/* ======= Wizard ======= */}
+          {/* Wizard */}
           {mode === "wizard" && (
             <Modal onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
               <TopRow>
@@ -135,7 +270,7 @@ export default function Main() {
                   <BodyBlock>
                     <CenterWrap>
                       <Input
-                        placeholder="예: 차연"
+                        placeholder="예: 지수"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
                       />
@@ -154,12 +289,10 @@ export default function Main() {
                     <CenterWrap>
                       <TwoCols>
                         <Choice $selected={gender === "male"} onClick={() => setGender("male")}>
-                          <Icon>👤</Icon>
-                          남자
+                          <Icon>👤</Icon>남자
                         </Choice>
                         <Choice $selected={gender === "female"} onClick={() => setGender("female")}>
-                          <Icon>👤</Icon>
-                          여자
+                          <Icon>👤</Icon>여자
                         </Choice>
                       </TwoCols>
                     </CenterWrap>
@@ -283,7 +416,7 @@ export default function Main() {
             </Modal>
           )}
 
-          {/* ======= Review ======= */}
+          {/* Review */}
           {mode === "review" && (
             <Modal onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
               <CloseRow>
@@ -295,8 +428,7 @@ export default function Main() {
                 <HeartLg>♡</HeartLg>
                 <IntroTitle>AI 소개팅 시뮬레이션</IntroTitle>
                 <IntroDesc>
-                  안녕하세요, 사용자님!
-                  <br />
+                  안녕하세요, 사용자님!<br />
                   원하는 상대방의 조건을 설정하고 AI와 채팅을 시작해보세요
                 </IntroDesc>
               </div>
@@ -313,9 +445,7 @@ export default function Main() {
               </SummaryBox>
 
               <ReviewBtnCol>
-                <Primary onClick={startChat}>
-                  💬 {chatBtnText}
-                </Primary>
+                <Primary onClick={startChat}>💬 {chatBtnText}</Primary>
                 <Outline onClick={() => { setMode("wizard"); setStep(0); }}>
                   조건 다시 설정하기
                 </Outline>
@@ -328,37 +458,37 @@ export default function Main() {
   );
 }
 
-/* ===== styles ===== */
+/* =========================
+   styles — 랜딩 + 모달(기존 유지)
+   ========================= */
 const Bg = styled.main`
   min-height: 100vh;
-  display: grid;
-  place-items: center;
   background: linear-gradient(135deg, #ffb7d5 0%, #ff9ec2 40%, #ffb5d1 100%);
-  padding: 24px;
+  padding: 24px 0 48px;
 `;
 const Header = styled.div`
   position: fixed; top: 12px; left: 24px;
   color: #fff; font-weight: 800; letter-spacing: 1px;
 `;
-const IntroCard = styled.section`
-  width: min(92vw, 520px);
-  background: #fff;
-  border-radius: 16px;
-  padding: 28px 24px;
-  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+
+const Container = styled.div`
+  width: min(1100px, 92vw);
+  margin: 72px auto 0;
+`;
+
+const Hero = styled.section`
   text-align: center;
+  margin-bottom: 18px;
 `;
-const Heart = styled.div`
-  width: 52px; height: 52px; border-radius: 50%;
-  border: 2px solid #ff2f79; color: #ff2f79;
-  display: grid; place-items: center; margin: 0 auto 10px;
-  font-weight: 800;
+const HeroTitle = styled.h1`
+  font-size: clamp(26px, 3.6vw, 36px);
+  color: #fff;
+  text-shadow: 0 6px 16px rgba(0,0,0,.18), 0 2px 0 rgba(255,255,255,.35);
+  margin: 0 0 6px;
 `;
-const HeartLg = styled(Heart)`
-  width: 56px; height: 56px; font-size: 22px;
+const HeroSub = styled.p`
+  color: #ffe7f1; margin: 0 0 14px;
 `;
-const IntroTitle = styled.h2` margin: 6px 0 8px; `;
-const IntroDesc = styled.p` margin: 0 0 16px; color: #555; line-height: 1.5; `;
 const Primary = styled.button`
   width: 100%;
   height: 46px;
@@ -372,17 +502,90 @@ const Primary = styled.button`
   transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
   &:hover { transform: translateY(-1px); filter: brightness(1.02); }
 `;
-const Outline = styled.button`
-  width: 100%;
-  height: 46px;
-  border-radius: 999px;
-  border: 2px solid #ff2f79;
-  color: #ff2f79;
-  background: #fff;
-  font-weight: 800;
-  cursor: pointer;
+const HeroCta = styled(Primary)`
+  width: auto; padding: 0 18px; display: inline-flex; align-items: center; gap: 6px;
 `;
 
+const Card = styled.section`
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0,0,0,.18);
+  padding: 20px 18px;
+  margin: 16px 0;
+`;
+const CardHead = styled.div`
+  display: flex; align-items: center; gap: 8px; margin-bottom: 10px;
+  h3 { margin: 0; }
+`;
+const HeadIcon = styled.span` font-size: 18px; `;
+
+const StepsGrid = styled.div`
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+  @media (max-width: 900px){ grid-template-columns: repeat(2, 1fr); }
+`;
+const StepItem = styled.div`
+  background: #fafafa; border: 1px solid #f0f0f0; border-radius: 12px;
+  padding: 14px; text-align: center;
+`;
+const Num = styled.div`
+  width: 36px; height: 36px; line-height: 36px; margin: 0 auto 8px;
+  border-radius: 999px; font-weight: 800; color: #ff2f79; background: #ffe9f1;
+`;
+const StepTitle = styled.div` font-weight: 800; margin-bottom: 6px; `;
+const StepDesc = styled.div` font-size: 13px; color: #666; `;
+
+const TwoCol = styled.div`
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  @media (max-width: 960px){ grid-template-columns: 1fr; }
+`;
+const Bullets = styled.ul`
+  margin: 0; padding: 0 0 0 0; list-style: none;
+  li { padding: 10px 12px; border-radius: 10px; background:#fafafa; border:1px solid #f0f0f0; }
+  li + li { margin-top: 8px; }
+  b { color: #111; }
+  span { color: #666; }
+`;
+
+const Tips = styled.div`
+  display: grid; grid-template-columns: 1fr; gap: 8px; margin-bottom: 10px;
+`;
+const TipBox = styled.div`
+  background: #fff7fb; border: 1px solid #ffecf4; border-radius: 10px; padding: 10px 12px;
+`;
+const TipTitle = styled.div` font-weight: 800; color: #ff2f79; margin-bottom: 4px; `;
+const TipText  = styled.div` color: #555; font-size: 13px; `;
+const Links = styled.ul`
+  margin: 8px 0 0; padding: 0; list-style:none;
+  li + li { margin-top: 6px; }
+  a { color: #333; text-decoration: none; font-weight: 700; }
+  a:hover { text-decoration: underline; }
+`;
+
+const Features3 = styled.div`
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 8px;
+  @media (max-width: 960px){ grid-template-columns: 1fr; }
+`;
+const FeatureCard = styled.div`
+  background: #fff; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,.12);
+  padding: 18px 16px; text-align: center;
+`;
+const FeatIcon = styled.div` font-size: 28px; `;
+const FeatTitle = styled.div` font-weight: 800; margin: 6px 0; `;
+const FeatText  = styled.div` color:#666; font-size: 13px; `;
+
+const Footer = styled.footer`
+  margin-top: 20px; padding: 18px 0 8px; color: #fff;
+`;
+const FootCols = styled.div`
+  display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 24px;
+  @media (max-width: 960px){ grid-template-columns: 1fr; gap: 12px; }
+`;
+const Brand = styled.div` font-weight: 900; font-size: 18px; margin-bottom: 6px; `;
+const FootTitle = styled.div` font-weight: 900; margin-bottom: 8px; `;
+const Small = styled.div` font-size: 13px; opacity: .95; `;
+const Copy = styled.div` font-size: 12px; margin-top: 8px; opacity: .85; `;
+
+/* ===== 모달 공통 (기존 유지) ===== */
 const Overlay = styled.div`
   position: fixed; inset: 0;
   background: rgba(0,0,0,.45);
@@ -415,52 +618,54 @@ const Close = styled.button`
   border: 0; background: transparent; font-size: 22px; cursor: pointer; color: #888;
   &:hover { color: #444; }
 `;
+const HeartLg = styled.div`
+  width: 56px; height: 56px; border-radius: 50%;
+  border: 2px solid #ff2f79; color: #ff2f79;
+  display: grid; place-items: center; margin: 0 auto 10px;
+  font-weight: 800; font-size: 22px;
+`;
+const IntroTitle = styled.h2` margin: 6px 0 8px; `;
+const IntroDesc  = styled.p` margin: 0 0 16px; color: #555; line-height: 1.5; `;
+const Outline = styled.button`
+  width: 100%;
+  height: 46px;
+  border-radius: 999px;
+  border: 2px solid #ff2f79;
+  color: #ff2f79;
+  background: #fff;
+  font-weight: 800;
+  cursor: pointer;
+`;
 
-/* 공통 내용 래퍼 */
+/* Wizard content wrappers */
 const Content = styled.div`
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+  flex: 1; display: flex; flex-direction: column;
 `;
 const Group = styled.div`
   width: min(100%, 440px);
   margin: 0 auto;
 `;
-
 const H1 = styled.h3` margin: 18px 0 8px; `;
 const P  = styled.p`  margin: 0 0 18px; color: #666; `;
 const SubHint = styled.div` margin-top: 6px; font-size: 12px; color: #888; `;
-
 const Input = styled.input`
-  width: 100%; height: 46px;
-  border-radius: 10px;
+  width: 100%; height: 46px; border-radius: 10px;
   border: 1.5px solid #e6e6e6; padding: 0 12px; font-size: 15px;
   &:focus { outline: none; border-color: #ff7aa7; box-shadow: 0 0 0 3px rgba(255,122,167,.15); }
 `;
 const Search = styled(Input)``;
 
 /* 상단 고정 + 중앙 입력 */
-const StepSection = styled.div`
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-`;
+const StepSection = styled.div` display: flex; flex-direction: column; flex: 1; `;
 const HeadBlock = styled.div``;
-const BodyBlock = styled.div`
-  flex: 1;
-  display: grid;
-  place-items: center;
-`;
-const CenterWrap = styled.div`
-  width: min(100%, 440px);
-`;
+const BodyBlock = styled.div` flex: 1; display: grid; place-items: center; `;
+const CenterWrap = styled.div` width: min(100%, 440px); `;
 
 const TwoCols = styled.div`
   display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 10px;
 `;
 const Choice = styled.button`
-  height: 240px;
-  border-radius: 14px; width: 100%;
+  height: 240px; border-radius: 14px; width: 100%;
   border: 2px solid ${({ $selected }) => ($selected ? "#ff2f79" : "#e6e6e6")};
   background: ${({ $selected }) => ($selected ? "linear-gradient(180deg,#ff3f8a 0%, #ff2f79 100%)" : "#fff")};
   color: ${({ $selected }) => ($selected ? "#fff" : "#333")};
@@ -485,17 +690,12 @@ const Choice = styled.button`
 const Icon = styled.div` font-size: 56px; `;
 
 const TagWrap = styled.div`
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-  max-height: 340px;
-  overflow: auto;
-  padding-right: 2px;
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; margin-top: 10px; max-height: 340px; overflow: auto; padding-right: 2px;
 `;
 const Tag = styled.button`
   border-radius: 999px; padding: 10px 14px; border: 2px solid #e6e6e6;
-  background: ${({ $active }) => ($active ? "#ff2f79 100%" : "#fff")};
+  background: ${({ $active }) => ($active ? "linear-gradient(180deg,#ff3f8a 0%, #ff2f79 100%)" : "#fff")};
   color: ${({ $active }) => ($active ? "#fff" : "#333")};
   font-weight: 700; cursor: pointer; text-align: center;
   border-color: ${({ $active }) => ($active ? "#ff2f79" : "#e6e6e6")};
@@ -518,11 +718,8 @@ const Tag = styled.button`
 `;
 
 const BtnRow = styled.div`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: auto;
-  padding-top: 16px;
+  display: flex; justify-content: space-between; align-items: center;
+  margin-top: auto; padding-top: 16px;
 `;
 const Ghost = styled.button`
   padding: 10px 14px; border-radius: 10px; border: 1px solid #ddd; background: #fff; cursor: pointer;
@@ -534,29 +731,19 @@ const Next = styled.button`
   cursor: ${({ disabled }) => (disabled ? "not-allowed" : "pointer")};
 `;
 
-/* Review styles */
+/* Review */
 const SummaryTitle = styled.h4`
-  text-align: center;
-  margin: 12px 0 8px;
-  color: #333;
+  text-align: center; margin: 12px 0 8px; color: #333;
 `;
 const SummaryBox = styled.div`
   width: min(100%, 480px);
   margin: 0 auto 14px;
-  background: #fafafa;
-  border: 1px solid #eee;
-  border-radius: 10px;
-  padding: 14px 16px;
-  color: #333;
+  background: #fafafa; border: 1px solid #eee; border-radius: 10px;
+  padding: 14px 16px; color: #333;
 `;
 const SummaryRow = styled.div`
-  font-size: 14px;
-  line-height: 1.7;
-  & + & { margin-top: 4px; }
+  font-size: 14px; line-height: 1.7; & + & { margin-top: 4px; }
 `;
 const ReviewBtnCol = styled.div`
-  width: min(100%, 480px);
-  margin: 10px auto 0;
-  display: grid;
-  gap: 10px;
+  width: min(100%, 480px); margin: 10px auto 0; display: grid; gap: 10px;
 `;
