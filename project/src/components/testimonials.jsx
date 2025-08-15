@@ -1,8 +1,14 @@
 // src/components/testimonials.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styled, { keyframes } from "styled-components";
-import { useNavigate } from "react-router-dom";
-
+import { useNavigate, useLocation } from "react-router-dom";
+import {
+  createStompClient,
+  subscribeToSession,
+  sendMessage,
+  normalizeWSIn,
+  normalizeWSSend,
+} from "../lib/ws";
 /**
  * props:
  * - messages: [{ id, role: 'ai'|'user', text, ts }]
@@ -11,8 +17,23 @@ import { useNavigate } from "react-router-dom";
  */
 export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLoggedIn }) {
   const navigate = useNavigate();
+  const { state } = useLocation();
+  const sessionId = state?.sessionId ?? null;       // 메인에서 넘겨준 세션
+  const initialHello = state?.aiHello || null;      // 메인에서 넘겨준 첫 인사
+  const opponent = state?.opponent || {
+    name: state?.name || "상대방",
+    age: state?.age ?? null,
+    job: state?.job || "",
+    gender: state?.gender || "",
+    talkStyles: state?.talkStyles || [],
+    traits: state?.traits || [],
+    hobbies: state?.hobbies || [],
+  };
+  const clientRef = useRef(null);                 // STOMP Client
+  const subRef = useRef(null);                    // 구독 핸들
   const [input, setInput] = useState("");
   const [typing, setTyping] = useState(false); // AI 로딩 버블
+  const [sentCount, setSentCount] = useState(0);
   const bottomRef = useRef(null);
 
   // 외부 상태가 없으면 내부 상태로 폴백
@@ -26,6 +47,15 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
   }
 };
 
+// 한글 종성 체크 → "이에요/예요" 등
+  const hasJong = (word = "") => {
+    if (!word) return false;
+    const ch = word[word.length - 1];
+    const code = ch.charCodeAt(0);
+    if (code < 0xac00 || code > 0xd7a3) return false;
+    return ((code - 0xac00) % 28) !== 0;
+  };
+
   // 최초 AI 인사 메시지
   useEffect(() => {
     if (!msgs || msgs.length === 0) {
@@ -33,7 +63,9 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
         {
           id: Date.now(),
           role: "ai",
-          text: "안녕하세요! 지연이에요. 어떤 이야기부터 시작할까요?",
+          text:
+            initialHello ||
+            `안녕하세요! ${opponent.name}${hasJong(opponent.name) ? "이에요" : "예요"}. 어떤 이야기부터 시작할까요?`,
           ts: new Date(),
         },
       ]);
@@ -41,38 +73,104 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // 세션 발화 제한(10) 현재 카운트 로드
+  const PER_SESSION_LIMIT = 10;
+  const sessionCountKey = sessionId ? `tt_session_${sessionId}_sent` : null;
+  useEffect(() => {
+    const isLocal = String(sessionId || "").startsWith("local-");
+ if (!sessionId || isLocal) return; // 로컬 세션은 WS 연결 생략
+    const n = Number(localStorage.getItem(sessionCountKey) || "0");
+    setSentCount(Number.isFinite(n) ? n : 0);
+  }, [sessionId]); 
+
   // 새 메시지 오면 맨 아래로 스크롤
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs, typing]);
+
+  // ✅ 세션이 있을 때만 WS 연결 → /topic/{sessionId} 구독
+useEffect(() => {
+  if (!sessionId) return; // 세션 없으면 오프라인 모드(더미 응답)
+  if (String(sessionId).startsWith("local-")) return; // 로컬 세션은 WS 생략
+  const client = createStompClient({
+    onConnect: () => {
+      // 구독 시작
+      subRef.current = subscribeToSession(client, sessionId, (body) => {
+        // 백엔드 응답 키 매핑 (상황별로 자동 스위칭)
+        const { text: aiText } = normalizeWSIn(body);
+        if (aiText) {
+          setMsgs((prev) => [
+            ...prev,
+            { id: Date.now(), role: "ai", text: aiText, ts: new Date() },
+          ]);
+          setTyping(false);
+        }
+      });
+    },
+    onError: (err) => {
+      console.error("[WS] error:", err);
+    },
+  });
+
+  clientRef.current = client;
+
+  return () => {
+    try { subRef.current?.unsubscribe(); } catch {}
+    try { client.deactivate(); } catch {}
+    subRef.current = null;
+    clientRef.current = null;
+  };
+}, [sessionId, setMsgs]);
 
   const handleSend = (e) => {
     e?.preventDefault?.();
     const text = input.trim();
     if (!text) return;
 
-    // 사용자 메시지 추가
+    // 세션당 사용자 발화 10회 제한
+    if (sessionId && sentCount >= PER_SESSION_LIMIT) {
+      alert("이 세션에서 보낼 수 있는 횟수(10회)를 모두 사용했습니다.");
+      return;
+    }
+
+    // 내 메시지 즉시 렌더
     setMsgs((prev) => [
       ...prev,
       { id: Date.now(), role: "user", text, ts: new Date() },
     ]);
     setInput("");
 
-    // AI 타이핑 표시 → 간단한 더미 응답
-    setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      setMsgs((prev) => [
-        ...prev,
-        {
-          id: Date.now() + 1,
-          role: "ai",
-          text: "네, 반가워요! 저도 처음 뵙네요. 어떤 일을 하시나요?",
-          ts: new Date(),
-        },
-      ]);
-    }, 1200);
+    if (sessionId) {
+      // 카운트 +1 저장
+      const next = sentCount + 1;
+      setSentCount(next);
+      localStorage.setItem(sessionCountKey, String(next));
+    }
+
+    // WS 연결 시 서버로 전송 → /app/send
+    if (clientRef.current?.connected && sessionId) {
+      setTyping(true); // 서버 응답 대기 UI
+      sendMessage(clientRef.current, normalizeWSSend({ sessionId, text }));
+    } else {
+      // 오프라인(WS 미연결) 더미 응답 유지
+      setTyping(true);
+      setTimeout(() => {
+        setTyping(false);
+        setMsgs((prev) => [
+          ...prev,
+          {
+            id: Date.now() + 1,
+            role: "ai",
+            text: "(WS 미연결) 더미 응답입니다. 서버 연결 후 실시간 메시지가 표시됩니다.",
+            ts: new Date(),
+          },
+        ]);
+      }, 1000);
+    }
   };
+
+  const outOfQuota = !!sessionId && sentCount >= PER_SESSION_LIMIT;
+  const avatarEmoji = opponent.gender === "male" ? "👨" : opponent.gender === "female" ? "👩" : "👤";
 
   return (
     <Wrap>
@@ -81,15 +179,29 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
           <BackBtn type="button" onClick={() => navigate(-1)} aria-label="뒤로가기">
             ←
           </BackBtn>
-          <Avatar sm aria-hidden>👤</Avatar>
+          <Avatar $sm aria-hidden>{avatarEmoji}</Avatar>
           <HeaderInfo>
-            <Name>지연</Name>
-            <Sub>25세 · 디자이너</Sub>
+            <Name>{opponent.name}</Name>
+            <Sub>
+              {opponent.age ? `${opponent.age}세` : ""}
+              {opponent.age && opponent.job ? " · " : ""}
+              {opponent.job || ""}
+            </Sub>
           </HeaderInfo>
         </Left>
 
         <Right>
-          <AnalyzeBtn type="button" onClick={() => navigate("/analysis")}>
+          {sessionId && (
+            <Quota title="이 세션에서 보낼 수 있는 남은 횟수">
+              {PER_SESSION_LIMIT - sentCount} / {PER_SESSION_LIMIT}
+            </Quota>
+          )}
+          <AnalyzeBtn
+            type="button"            
+            onClick={() => navigate("/analysis", { state: { sessionId, name: opponent.name } })}
+            disabled={!sessionId}
+            title={sessionId ? "" : "세션 정보가 없어요"}
+          >
             📊 분석 보기
           </AnalyzeBtn>
         </Right>
@@ -99,7 +211,7 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
         {msgs.map((m) =>
           m.role === "ai" ? (
             <Row key={m.id}>
-              <Avatar aria-hidden>👤</Avatar>
+              <Avatar $sm aria-hidden>{avatarEmoji}</Avatar>
               <BubbleAI>
                 {m.text}
                 <Time>{formatTime(m.ts)}</Time>
@@ -109,7 +221,7 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
             <RowMine key={m.id}>
               <BubbleMe>
                 {m.text}
-                <Time me>{formatTime(m.ts)}</Time>
+                <Time $me>{formatTime(m.ts)}</Time>
               </BubbleMe>
             </RowMine>
           )
@@ -117,8 +229,8 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
 
         {/* AI 타이핑 로딩 */}
         {typing && (
-          <Row>
-            <Avatar aria-hidden>👤</Avatar>
+          <Row>            
+            <Avatar aria-hidden>{avatarEmoji}</Avatar>
             <TypingBubble>
               <Dot />
               <Dot />
@@ -137,8 +249,12 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          disabled={outOfQuota}
+          title={outOfQuota ? "이 세션의 발화 제한(10회)을 모두 사용했습니다." : ""}
         />
-        <SendBtn type="submit" aria-label="전송">✈</SendBtn>
+        <SendBtn type="submit" aria-label="전송" disabled={outOfQuota} title={outOfQuota ? "제한 초과" : ""}>
+          ✈
+        </SendBtn>
       </InputBar>
     </Wrap>
   );
@@ -174,7 +290,9 @@ const Wrap = styled.section`
 
 const ChatHeader = styled.header`
   grid-row: 1;
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex; 
+  align-items: center; 
+  justify-content: space-between;
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(255,183,213,.35), rgba(255,183,213,.15), #fff 80%);
   border-bottom: 1px solid rgba(0,0,0,.04);
@@ -185,31 +303,61 @@ const ChatHeader = styled.header`
 `;
 
 const Left = styled.div`
-  display: flex; align-items: center; gap: 10px;
+  display: flex; 
+  align-items: 
+  center; gap: 10px;
 `;
 
 const Right = styled.div``;
 
+const Quota = styled.span`
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 8px;
+  margin-right: 8px;
+  border-radius: 6px;
+  border: 1px solid rgba(0,0,0,.08);
+  background: #fff;
+  font-size: 12px;
+  color: #111;
+`;
+
 const BackBtn = styled.button`
-  border: 0; background: transparent; font-size: 18px;
-  width: 32px; height: 32px; border-radius: 8px; cursor: pointer;
+  border: 0; 
+  background: transparent; 
+  font-size: 18px;
+  width: 32px; 
+  height: 32px; 
+  border-radius: 8px; 
+  cursor: pointer;
   &:hover { background: rgba(0,0,0,.06); }
 `;
 
 const Avatar = styled.div`
-  width: ${({ sm }) => (sm ? 28 : 32)}px;
-  height: ${({ sm }) => (sm ? 28 : 32)}px;
+  width: ${({ $sm }) => ($sm ? 28 : 32)}px;
+  height: ${({ $sm }) => ($sm ? 28 : 32)}px;
   border-radius: 999px;
   background: #f3f4f6;
   display: grid; place-items: center;
-  font-size: ${({ sm }) => (sm ? 14 : 16)}px;
+  font-size: ${({ $sm }) => ($sm ? 14 : 16)}px;
 `;
 
 const HeaderInfo = styled.div`
-  display: flex; flex-direction: column; line-height: 1.1;
+  display: flex; 
+  flex-direction: column; 
+  line-height: 1.1;
 `;
-const Name = styled.div` font-weight: 800; color: #111; `;
-const Sub = styled.div` font-size: 12px; color: #888; `;
+
+const Name = styled.div` 
+font-weight: 800; 
+color: #111; 
+`;
+
+const Sub = styled.div` 
+font-size: 12px; 
+color: #888; 
+`;
 
 const MessagesArea = styled.div`
   grid-row: 2;
@@ -222,8 +370,12 @@ const MessagesArea = styled.div`
 `;
 
 const Row = styled.div`
-  display: flex; align-items: flex-end; gap: 8px; margin: 8px 0;
+  display: flex; 
+  align-items: flex-end; 
+  gap: 8px; 
+  margin: 8px 0;
 `;
+
 const RowMine = styled(Row)`
   justify-content: flex-end;
 `;
@@ -249,7 +401,7 @@ const BubbleMe = styled(BubbleAI)`
 const Time = styled.div`
   margin-top: 6px;
   font-size: 11px;
-  color: ${({ me }) => (me ? "rgba(255,255,255,.7)" : "#90939a")};
+  color: ${({ $me }) => ($me ? "rgba(255,255,255,.7)" : "#90939a")};
 `;
 
 const bounce = keyframes`
@@ -259,12 +411,17 @@ const bounce = keyframes`
 `;
 
 const TypingBubble = styled(BubbleAI)`
-  display: inline-flex; gap: 6px; align-items: center;
-  width: 64px; justify-content: center;
+  display: inline-flex; 
+  gap: 6px; 
+  align-items: center;
+  width: 64px; 
+  justify-content: center;
 `;
 
 const Dot = styled.span`
-  width: 6px; height: 6px; border-radius: 50%;
+  width: 6px; 
+  height: 6px; 
+  border-radius: 50%;
   background: #9ca3af;
   animation: ${bounce} 1s infinite;
   &:nth-child(2){ animation-delay: .15s; }
@@ -273,7 +430,9 @@ const Dot = styled.span`
 
 const InputBar = styled.form`
   grid-row: 3;
-  display: grid; grid-template-columns: 1fr 44px; gap: 8px;
+  display: grid; 
+  grid-template-columns: 1fr 44px; 
+  gap: 8px;
   padding: 10px 16px;
   background: #fff;
   border-top: 1px solid rgba(0,0,0,.06);
@@ -298,18 +457,27 @@ const MsgInput = styled.textarea`
 `;
 
 const SendBtn = styled.button`
-  border: 0; border-radius: 10px;
+  border: 0; 
+  border-radius: 10px;
   background: #9aa0a6;
-  color: #fff; font-size: 16px; cursor: pointer;
+  color: #fff; 
+  font-size: 16px; 
+  cursor: pointer;
   &:hover { filter: brightness(0.97); }
   &:active { transform: translateY(1px); }
 `;
 
 const AnalyzeBtn = styled.button`
-  display: inline-flex; align-items: center; gap: 6px;
+  display: inline-flex; 
+  align-items: center; 
+  gap: 6px;
   border: 1px solid rgba(0,0,0,.12);
   background: #fff;
-  height: 35px; padding: 0 10px;
-  border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 700;
+  height: 35px; 
+  padding: 0 10px;
+  border-radius: 8px; 
+  cursor: pointer; 
+  font-size: 13px; 
+  font-weight: 700;
   &:hover { background: #f9fafb; }
 `;
