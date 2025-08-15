@@ -1,6 +1,12 @@
+// src/components/signup.jsx
 import React, { useMemo, useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import styled from "styled-components";
+import {
+  requestEmailVerification,
+  confirmEmailVerification,
+  signUp,            // ✅ 회원가입 API 추가
+} from "../api/auth";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -13,6 +19,7 @@ const Signup = () => {
   const [pwd2, setPwd2] = useState("");
   const [birth, setBirth] = useState(""); // yyyy-mm-dd
   const [gender, setGender] = useState(""); // 'male' | 'female'
+  const [job, setJob] = useState("");
 
   const [emailChecked, setEmailChecked] = useState(false);
   const [nickChecked, setNickChecked] = useState(false);
@@ -20,8 +27,12 @@ const Signup = () => {
   // ✅ 이메일 인증 관련
   const [emailVerifySent, setEmailVerifySent] = useState(false); // 인증 메일 발송됨
   const [emailVerified, setEmailVerified] = useState(false);     // 인증 완료됨
+  const [code, setCode] = useState("");
+  const [sending, setSending] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   const [showDone, setShowDone] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // ✅ 회원가입 버튼 로딩
 
   // 유효성
   const emailValid = useMemo(() => emailRegex.test(email), [email]);
@@ -45,44 +56,114 @@ const Signup = () => {
 
   const handleEmailCheck = () => {
     if (!emailValid) return;
-    // TODO: 실제 중복 체크 API
+    // TODO: 이메일 중복 체크 API 붙이기
     setEmailChecked(true);
     alert("사용 가능한 이메일입니다.");
   };
 
   const handleNickCheck = () => {
     if (!nickValid) return;
-    // TODO: 실제 중복 체크 API
+    // TODO: 닉네임 중복 체크 API 붙이기
     setNickChecked(true);
     alert("사용 가능한 닉네임입니다.");
   };
 
-  // ✅ 인증 메일 보내기
-  const handleSendVerifyEmail = () => {
-    if (!emailChecked || !emailValid) return;
-    // TODO: 실제 인증 메일 발송 API
-    setEmailVerifySent(true);
-    alert("인증 메일을 보냈습니다. 메일함에서 확인 후 '이메일 확인'을 눌러주세요.");
+  // ✅ 인증 메일 보내기 (실제 API 연동)
+  const handleSendVerifyEmail = async () => {
+    if (!emailChecked || !emailValid || sending) return;
+    try {
+      setSending(true);
+      const { data } = await requestEmailVerification(email);
+      // data: { success:boolean, message:string }
+      if (data?.success) {
+        setEmailVerifySent(true);
+        alert(data?.message || "인증 메일을 보냈습니다. 메일함에서 코드를 확인하세요.");
+      } else {
+        alert(data?.message || "인증 메일 발송에 실패했습니다.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("요청 실패(네트워크/CORS/서버 오류)");
+    } finally {
+      setSending(false);
+    }
   };
 
-  // ✅ 메일에서 확인 후 버튼 눌러 인증 완료 처리
-  const handleConfirmEmail = () => {
-    if (!emailVerifySent) return;
-    // TODO: 실제 인증 확인 API (토큰 검증 등)
-    setEmailVerified(true);
-    alert("이메일 인증이 완료되었습니다.");
+  // ✅ 코드 확인 (실제 API 연동)
+  const handleConfirmEmail = async () => {
+    if (!emailVerifySent || !code.trim() || confirming) return;
+    try {
+      setConfirming(true);
+      const { data } = await confirmEmailVerification({ email, code: code.trim() });
+      if (data?.success) {
+        setEmailVerified(true);
+        alert(data?.message || "이메일 인증이 완료되었습니다.");
+      } else {
+        alert(data?.message || "인증에 실패했습니다. 코드를 다시 확인해주세요.");
+      }
+    } catch (e) {
+      console.error(e);
+      alert("인증 실패(네트워크/CORS/서버 오류)");
+    } finally {
+      setConfirming(false);
+    }
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (!canSubmit) return;
-    // TODO: 회원가입 API
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  if (!canSubmit || submitting) return;
+
+  // birth(yyyy-mm-dd) → age(만 나이 대충 계산; 문자열로)
+   const calcAge = (b) => {
+     try {
+       const y = parseInt(b.slice(0, 4), 10);
+       if (!y) return "";
+       const nowY = new Date().getFullYear();
+       return String(nowY - y);
+     } catch {
+       return "";
+     }
+   };
+
+  try {
+    setSubmitting(true);
+    // ⚠️ 서버 필드명이 다르면 여기서 키를 맞춰주세요(예: birthDate/sex 등)
+    const payload = {
+      email,
+      password: pwd,
+      nickname,
+       gender,
+       age: calcAge(birth), // ✅ 서버 DTO에 맞춤
+       job: "",            // ✅ 일단 공란으로 전달 (필수 X). UI 추가시 setJob 값 사용
+    };
+
+    const res = await signUp(payload);
+    const { status, data } = res || {};
+
+    // 서버가 {success, message}를 주는 경우/안 주는 경우 모두 커버
+    if (data?.success === false) {
+      alert(data?.message || "회원가입에 실패했습니다.");
+      return;
+    }
+    if (status >= 400) {
+      alert("회원가입에 실패했습니다.");
+      return;
+    }
+
     setShowDone(true);
     setTimeout(() => {
       setShowDone(false);
       navigate("/login");
     }, 1200);
-  };
+  } catch (err) {
+    console.error(err);
+    // 서버에서 메시지를 내려주면 표시
+    const msg = err?.response?.data?.message || "회원가입 실패(네트워크/CORS/서버 오류)";
+    alert(msg);
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   // 입력이 바뀌면 다시 중복확인/인증 필요
   const onChangeEmail = (v) => {
@@ -90,6 +171,7 @@ const Signup = () => {
     setEmailChecked(false);
     setEmailVerifySent(false);
     setEmailVerified(false);
+    setCode("");
   };
   const onChangeNick = (v) => {
     setNickname(v);
@@ -132,31 +214,45 @@ const Signup = () => {
         {/* ✅ 이메일 인증 흐름 */}
         {emailChecked && (
           <>
-            <RightAlign>
-              {!emailVerifySent && !emailVerified && (
-                <SmallBtn type="button" onClick={handleSendVerifyEmail}>
-                  이메일 인증
+            {!emailVerifySent && !emailVerified && (
+              <RightAlign>
+                <SmallBtn type="button" onClick={handleSendVerifyEmail} disabled={sending}>
+                  {sending ? "전송중..." : "이메일 인증"}
                 </SmallBtn>
-              )}
-              {emailVerifySent && !emailVerified && (
-                <SmallBtn type="button" onClick={handleConfirmEmail}>
-                  이메일 확인
-                </SmallBtn>
-              )}
-              {emailVerified && (
-                <SmallBtn type="button" disabled>
-                  인증 완료
-                </SmallBtn>
-              )}
-            </RightAlign>
-
-            {!emailVerified && emailVerifySent && (
-              <Hint ok={false}>
-                메일함에서 인증을 완료하신 뒤, 위의 <b>이메일 확인</b> 버튼을 눌러주세요.
-              </Hint>
+              </RightAlign>
             )}
+
+            {emailVerifySent && !emailVerified && (
+              <>
+                <Inline>
+                  <Input
+                    placeholder="메일로 받은 인증코드"
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
+                  />
+                  <SmallBtn
+                    type="button"
+                    onClick={handleConfirmEmail}
+                    disabled={!code.trim() || confirming}
+                  >
+                    {confirming ? "확인중..." : "이메일 확인"}
+                  </SmallBtn>
+                </Inline>
+                <Hint ok={false}>
+                  메일함(스팸함 포함)에서 인증코드를 확인한 뒤 입력하고 <b>이메일 확인</b>을 눌러주세요.
+                </Hint>
+              </>
+            )}
+
             {emailVerified && (
-              <Hint ok={true}>이메일 인증이 완료되었습니다.</Hint>
+              <>
+                <RightAlign>
+                  <SmallBtn type="button" disabled>
+                    인증 완료
+                  </SmallBtn>
+                </RightAlign>
+                <Hint ok={true}>이메일 인증이 완료되었습니다.</Hint>
+              </>
             )}
           </>
         )}
@@ -226,8 +322,8 @@ const Signup = () => {
           </GenderBtn>
         </GenderRow>
 
-        <PrimaryBtn type="submit" disabled={!canSubmit}>
-          회원가입
+        <PrimaryBtn type="submit" disabled={!canSubmit || submitting}>
+            {submitting ? "가입 중..." : "회원가입"}
         </PrimaryBtn>
       </Card>
 

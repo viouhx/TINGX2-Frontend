@@ -1,0 +1,12 @@
+# 기본은 LF로
+* text=auto eol=lf
+
+# 윈도우 전용 스크립트만 CRLF 허용
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# 락/환경 파일은 반드시 LF
+yarn.lock text eol=lf
+package-lock.json text eol=lf
+.env* text eol=lf
