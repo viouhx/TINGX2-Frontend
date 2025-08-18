@@ -16,6 +16,34 @@ function toYmdDot(d) {
   }
 }
 
+/** 백엔드 UserDto → 화면용으로 통일 */
+function normalizeProfile(d = {}) {
+  const nickname = d.nickname ?? d.nickName ?? d.usNickname ?? d.name ?? "";
+  const email = d.email ?? d.usEmail ?? d.userEmail ?? "";
+
+  const rawGender = (d.gender ?? d.usGender ?? d.userGender ?? "")
+    .toString()
+    .toLowerCase();
+  const gender =
+    rawGender === "male" || rawGender === "m" || rawGender === "남"
+      ? "남자"
+      : rawGender === "female" || rawGender === "f" || rawGender === "여"
+      ? "여자"
+      : (d.gender || "-");
+
+  // 서버가 '나이'를 usAge/age로 줄 수도, 생일을 birth/birthDate로 줄 수도 있어 방어적으로 처리
+  const ageOrBirth =
+    d.age ??
+    d.usAge ??
+    d.birth ??
+    d.birthDate ??
+    d.usBirth ??
+    d.usBirthDate ??
+    "";
+
+  return { nickname, email, gender, birth: ageOrBirth };
+}
+
 /**
  * 최근 대화 카드용 표준화(기본 문구/추정값 제거)
  */
@@ -25,36 +53,44 @@ function normSession(s = {}) {
     s.partnerName ?? s.opponentName ?? s.targetName ?? s.aiName ?? "상대방";
 
   const liked =
-    s.favorability ?? s.likeability ?? s.likeabilityScore ?? s.favorabilityScore ?? null;
+    s.favorability ??
+    s.likeability ??
+    s.likeabilityScore ??
+    s.favorabilityScore ??
+    null;
 
-  const total =
-    s.totalScore ?? s.overallScore ?? null;
+  const total = s.totalScore ?? s.overallScore ?? null;
 
   const gender = s.gender ?? s.partnerGender ?? s.aiGender ?? "";
   const age = Number(s.age ?? s.partnerAge ?? s.aiAge ?? "") || null;
   const job = s.job ?? s.partnerJob ?? s.aiJob ?? "";
   const msgCount = s.messageCount ?? s.msgCount ?? s.totalMessages ?? 0;
-  const date = toYmdDot(s.createdAt ?? s.created_at ?? s.startedAt ?? Date.now());
+  const date = toYmdDot(
+    s.createdAt ?? s.created_at ?? s.startedAt ?? Date.now()
+  );
 
   const summaryRaw = s.summary ?? s.oneLiner ?? s.oneLineSummary ?? null;
   const tagRaw = s.tag ?? s.partnerTrait ?? null;
   const summary =
-    typeof summaryRaw === "string" && summaryRaw.trim() ? summaryRaw.trim() : null;
+    typeof summaryRaw === "string" && summaryRaw.trim()
+      ? summaryRaw.trim()
+      : null;
   const tag =
     typeof tagRaw === "string" && tagRaw.trim() ? tagRaw.trim() : null;
 
   return {
     id,
     name: `${partner}님과의 대화`,
-    liked,     // null 가능
-    total,     // null 가능
-    gender: gender === "male" ? "남자" : gender === "female" ? "여자" : String(gender || "-"),
+    liked, // null 가능
+    total, // null 가능
+    gender:
+      gender === "male" ? "남자" : gender === "female" ? "여자" : String(gender || "-"),
     age,
     job,
     msgCount,
     date,
-    summary,   // null 가능
-    tag,       // null 가능
+    summary, // null 가능
+    tag, // null 가능
   };
 }
 
@@ -75,15 +111,18 @@ export default function MyPage() {
     let alive = true;
     (async () => {
       try {
-        const { data } = await getMe(); // { uid, nickname, email, gender, birth, ...}
+        const { data } = await getMe(); // { usNickname, usEmail, ... }
         if (!alive) return;
-        setProfile(data);
-        setDraftNick(data?.nickname || "");
+        const p = normalizeProfile(data);
+        setProfile(p);
+        setDraftNick(p.nickname || "");
       } catch (e) {
         console.error("[mypage] getMe fail:", e);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   // 최근 대화
@@ -104,22 +143,24 @@ export default function MyPage() {
         if (alive) setLoading(false);
       }
     })();
-    return () => { alive = false; };
+    return () => {
+      alive = false;
+    };
   }, []);
 
   /* ===== 통계(서버가 준 값만 집계) =====
      - 평균 호감도: liked !== null 인 항목만
      - 평균 총점: total !== null 인 항목만 */
   const stats = useMemo(() => {
-    const likes = recent.map(r => r.liked).filter(v => v != null);
-    const totals = recent.map(r => r.total).filter(v => v != null);
+    const likes = recent.map((r) => r.liked).filter((v) => v != null);
+    const totals = recent.map((r) => r.total).filter((v) => v != null);
 
     const avgLiked = likes.length
-      ? Math.round((likes.reduce((a,b)=>a+b,0)/likes.length)*10)/10
+      ? Math.round((likes.reduce((a, b) => a + b, 0) / likes.length) * 10) / 10
       : 0;
 
     const avgTotal = totals.length
-      ? Math.round((totals.reduce((a,b)=>a+b,0)/totals.length)*10)/10
+      ? Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 10) / 10
       : 0;
 
     return { total: recent.length, avgLiked, avgTotal };
@@ -127,11 +168,17 @@ export default function MyPage() {
 
   // 닉네임 편집
   const startEdit = () => setEditing(true);
-  const cancelEdit = () => { setDraftNick(profile?.nickname || ""); setEditing(false); };
+  const cancelEdit = () => {
+    setDraftNick(profile?.nickname || "");
+    setEditing(false);
+  };
 
   const saveEdit = async () => {
     if (!profile) return;
-    if (!draftNick.trim()) { alert("닉네임을 입력해 주세요."); return; }
+    if (!draftNick.trim()) {
+      alert("닉네임을 입력해 주세요.");
+      return;
+    }
     try {
       setSaving(true);
       await updateNickname(draftNick.trim());
@@ -162,8 +209,12 @@ export default function MyPage() {
                 <LightBtn onClick={startEdit}>✏️ 닉네임 수정</LightBtn>
               ) : (
                 <>
-                  <PrimaryBtn onClick={saveEdit} disabled={saving}>{saving ? "저장중..." : "💾 저장"}</PrimaryBtn>
-                  <GhostBtn onClick={cancelEdit} disabled={saving}>✖ 취소</GhostBtn>
+                  <PrimaryBtn onClick={saveEdit} disabled={saving}>
+                    {saving ? "저장중..." : "💾 저장"}
+                  </PrimaryBtn>
+                  <GhostBtn onClick={cancelEdit} disabled={saving}>
+                    ✖ 취소
+                  </GhostBtn>
                 </>
               )}
             </HeadRight>
@@ -187,20 +238,26 @@ export default function MyPage() {
 
               <Field>
                 <Label>이메일</Label>
-                <Value title="이메일은 서버에서 수정 불가">{profile.email || "-"}</Value>
+                <Value title="이메일은 서버에서 수정 불가">
+                  {profile.email || "-"}
+                </Value>
               </Field>
 
               <Field>
                 <Label>성별</Label>
                 <Value title="성별은 서버에서 수정 불가">
-                  {profile.gender === "male" ? "남자" : profile.gender === "female" ? "여자" : (profile.gender || "-")}
+                  {profile.gender || "-"}
                 </Value>
               </Field>
 
               <Field>
-                <Label>생년월일</Label>
-                <Value title="생년월일은 서버에서 수정 불가">
-                  {profile.birth || profile.birthDate || "-"}
+                <Label>나이</Label>
+                <Value title="서버가 나이(usAge/age) 또는 생일(birth/birthDate)을 줄 수 있어요">
+                  {profile.birth
+                    ? /^\d+$/.test(String(profile.birth))
+                      ? `${profile.birth}세`
+                      : String(profile.birth)
+                    : "-"}
                 </Value>
               </Field>
             </FormGrid>
@@ -236,10 +293,22 @@ export default function MyPage() {
                   </ListTop>
 
                   <MetaRow>
-                    <MetaBox><MetaLabel>성별</MetaLabel><MetaVal>{r.gender}</MetaVal></MetaBox>
-                    <MetaBox><MetaLabel>나이</MetaLabel><MetaVal>{r.age ? `${r.age}세` : "-"}</MetaVal></MetaBox>
-                    <MetaBox><MetaLabel>직업</MetaLabel><MetaVal>{r.job || "-"}</MetaVal></MetaBox>
-                    <MetaBox><MetaLabel>메시지</MetaLabel><MetaVal>{r.msgCount}개</MetaVal></MetaBox>
+                    <MetaBox>
+                      <MetaLabel>성별</MetaLabel>
+                      <MetaVal>{r.gender}</MetaVal>
+                    </MetaBox>
+                    <MetaBox>
+                      <MetaLabel>나이</MetaLabel>
+                      <MetaVal>{r.age ? `${r.age}세` : "-"}</MetaVal>
+                    </MetaBox>
+                    <MetaBox>
+                      <MetaLabel>직업</MetaLabel>
+                      <MetaVal>{r.job || "-"}</MetaVal>
+                    </MetaBox>
+                    <MetaBox>
+                      <MetaLabel>메시지</MetaLabel>
+                      <MetaVal>{r.msgCount}개</MetaVal>
+                    </MetaBox>
                   </MetaRow>
 
                   <TagRow>
@@ -252,7 +321,12 @@ export default function MyPage() {
                   <ItemActions>
                     <SmallBtn
                       onClick={() =>
-                        navigate("/analysis", { state: { sessionId: r.id, name: r.name.replace("님과의 대화","") } })
+                        navigate("/analysis", {
+                          state: {
+                            sessionId: r.id,
+                            name: r.name.replace("님과의 대화", ""),
+                          },
+                        })
                       }
                       disabled={!r.id}
                       title={r.id ? "" : "세션 ID 없음"}
@@ -319,7 +393,7 @@ const Wrap = styled.div`
 const Card = styled.section`
   background: #fff;
   border-radius: 16px;
-  box-shadow: 0 18px 64px rgba(0,0,0,.16);
+  box-shadow: 0 18px 64px rgba(0, 0, 0, 0.16);
   padding: 18px 16px 16px;
 `;
 
@@ -360,8 +434,8 @@ const PrimaryBtn = styled.button`
   border: 0;
   color: #fff;
   font-weight: 800;
-  background: linear-gradient(180deg,#ff3f8a 0%, #ff2f79 100%);
-  box-shadow: 0 8px 18px rgba(255,47,121,.3);
+  background: linear-gradient(180deg, #ff3f8a 0%, #ff2f79 100%);
+  box-shadow: 0 8px 18px rgba(255, 47, 121, 0.3);
   cursor: pointer;
 `;
 const LightBtn = styled.button`
@@ -385,12 +459,12 @@ const GhostBtn = styled.button`
 `;
 
 const Dim = styled.div`
-  background:#fafafa;
-  border:1px dashed #eee;
-  border-radius:10px;
-  padding:16px;
-  text-align:center;
-  color:#777;
+  background: #fafafa;
+  border: 1px dashed #eee;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  color: #777;
 `;
 
 /* 프로필 */
@@ -398,7 +472,9 @@ const FormGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 12px;
-  @media (max-width: 640px){ grid-template-columns: 1fr; }
+  @media (max-width: 640px) {
+    grid-template-columns: 1fr;
+  }
 `;
 const Field = styled.div`
   display: grid;
@@ -424,7 +500,11 @@ const Input = styled.input`
   border-radius: 10px;
   border: 1.5px solid #e6e6e6;
   padding: 0 12px;
-  &:focus{ outline: none; border-color: #ff7aa7; box-shadow: 0 0 0 3px rgba(255,122,167,.15);}
+  &:focus {
+    outline: none;
+    border-color: #ff7aa7;
+    box-shadow: 0 0 0 3px rgba(255, 122, 167, 0.15);
+  }
 `;
 
 /* 리스트 */
@@ -480,7 +560,9 @@ const MetaRow = styled.div`
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 8px;
-  @media (max-width: 760px){ grid-template-columns: repeat(2, 1fr); }
+  @media (max-width: 760px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
 `;
 
 const MetaBox = styled.div`
@@ -548,7 +630,9 @@ const SmallBtn = styled.button`
   background: #fff;
   cursor: pointer;
   font-weight: 700;
-  &:hover{ background: #f9fafb; }
+  &:hover {
+    background: #f9fafb;
+  }
 `;
 
 /* 통계 */
@@ -564,7 +648,7 @@ const StatCard = styled.div`
   border: 1px solid #f1f1f1;
   padding: 18px 12px;
   text-align: center;
-  box-shadow: 0 10px 26px rgba(0,0,0,.06);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.06);
 `;
 
 const StatNum = styled.div`
@@ -586,7 +670,7 @@ const Toast = styled.div`
   display: grid;
   place-items: center;
   z-index: 50;
-  background: rgba(0,0,0,.25);
+  background: rgba(0, 0, 0, 0.25);
 `;
 
 const ToastInner = styled.div`
@@ -594,5 +678,5 @@ const ToastInner = styled.div`
   padding: 16px 20px;
   border-radius: 12px;
   font-weight: 800;
-  box-shadow: 0 16px 44px rgba(0,0,0,.25);
+  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.25);
 `;

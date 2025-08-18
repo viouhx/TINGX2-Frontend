@@ -1,19 +1,17 @@
-// src/components/testimonials.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import styled, { keyframes } from "styled-components";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  createStompClient,
-  subscribeToSession,
-  sendMessage,
-  normalizeWSIn,
-  normalizeWSSend,
+  createStompClient,     // STOMP 클라이언트 생성(백엔드 WS 엔드포인트/헤더 포함)
+  subscribeToSession,    // /topic/{sessionId} 구독 유틸
+  sendMessage,           // /app/send 로 전송 유틸
+  normalizeWSIn,         // 수신 메시지 → { text } 표준화
+  normalizeWSSend,       // 송신 페이로드 표준화
 } from "../lib/ws";
-/**
- * props:
- * - messages: [{ id, role: 'ai'|'user', text, ts }]
- * - setMessages: fn
- * - isLoggedIn: bool (디자인엔 영향 X)
+
+/** props:
+ * - messages / setMessages: 외부 상태가 있으면 그걸로 쓰고, 없으면 내부 상태로 폴백
+ * - isLoggedIn: (현재 디자인엔 영향 X)
  */
 export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLoggedIn }) {
   const navigate = useNavigate();
@@ -29,25 +27,28 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
     traits: state?.traits || [],
     hobbies: state?.hobbies || [],
   };
+
   const clientRef = useRef(null);                 // STOMP Client
   const subRef = useRef(null);                    // 구독 핸들
   const [input, setInput] = useState("");
-  const [typing, setTyping] = useState(false); // AI 로딩 버블
+  const [typing, setTyping] = useState(false);    // AI 로딩 버블
   const [sentCount, setSentCount] = useState(0);
+  const [ended, setEnded] = useState(false);      // ★ 채팅 종료 상태
   const bottomRef = useRef(null);
 
   // 외부 상태가 없으면 내부 상태로 폴백
   const [intMsgs, setIntMsgs] = useState([]);
   const msgs = useMemo(() => (extMsgs ?? intMsgs), [extMsgs, intMsgs]);
   const setMsgs = useMemo(() => (setExtMsgs ?? setIntMsgs), [setExtMsgs]);
-  const handleKeyDown = (e) => {
-  if (e.key === "Enter" && !e.shiftKey) {
-    e.preventDefault();   // 줄바꿈 막기
-    handleSend();         // 전송
-  }
-};
 
-// 한글 종성 체크 → "이에요/예요" 등
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
+  };
+
+  // 한글 종성 체크 → "이에요/예요" 등
   const hasJong = (word = "") => {
     if (!word) return false;
     const ch = word[word.length - 1];
@@ -76,9 +77,10 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
   // 세션 발화 제한(10) 현재 카운트 로드
   const PER_SESSION_LIMIT = 10;
   const sessionCountKey = sessionId ? `tt_session_${sessionId}_sent` : null;
+
   useEffect(() => {
     const isLocal = String(sessionId || "").startsWith("local-");
- if (!sessionId || isLocal) return; // 로컬 세션은 WS 연결 생략
+    if (!sessionId || isLocal) return; // 로컬 세션은 WS 연결 생략
     const n = Number(localStorage.getItem(sessionCountKey) || "0");
     setSentCount(Number.isFinite(n) ? n : 0);
   }, [sessionId]); 
@@ -88,42 +90,67 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
     bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs, typing]);
 
-  // ✅ 세션이 있을 때만 WS 연결 → /topic/{sessionId} 구독
-useEffect(() => {
-  if (!sessionId) return; // 세션 없으면 오프라인 모드(더미 응답)
-  if (String(sessionId).startsWith("local-")) return; // 로컬 세션은 WS 생략
-  const client = createStompClient({
-    onConnect: () => {
-      // 구독 시작
-      subRef.current = subscribeToSession(client, sessionId, (body) => {
-        // 백엔드 응답 키 매핑 (상황별로 자동 스위칭)
-        const { text: aiText } = normalizeWSIn(body);
-        if (aiText) {
-          setMsgs((prev) => [
-            ...prev,
-            { id: Date.now(), role: "ai", text: aiText, ts: new Date() },
-          ]);
-          setTyping(false);
-        }
-      });
-    },
-    onError: (err) => {
-      console.error("[WS] error:", err);
-    },
-  });
+  /* ===== WebSocket 연결: 서버 세션에서만 수행 ===== */
+  useEffect(() => {
+    if (!sessionId) return; // 세션 없으면 오프라인 모드
+    if (String(sessionId).startsWith("local-")) return; // 로컬 세션은 WS 생략
+    const client = createStompClient({
+      onConnect: () => {
+        subRef.current = subscribeToSession(client, sessionId, (body) => {
+          const { text: aiText } = normalizeWSIn(body);
+          if (aiText) {
+            setMsgs((prev) => [
+              ...prev,
+              { id: Date.now(), role: "ai", text: aiText, ts: new Date() },
+            ]);
+            setTyping(false);
+          }
+        });
+      },
+      onError: (err) => {
+        console.error("[WS] error:", err);
+      },
+    });
 
-  clientRef.current = client;
+    clientRef.current = client;
 
-  return () => {
+    return () => {
+      try { subRef.current?.unsubscribe(); } catch {}
+      try { client.deactivate(); } catch {}
+      subRef.current = null;
+      clientRef.current = null;
+    };
+  }, [sessionId, setMsgs]);
+
+  /* ===== 채팅 종료 ===== */
+  const endChat = () => {
+    if (ended) return;
+    setEnded(true);
+    setTyping(false);
+
+    // WS 구독/연결 정리
     try { subRef.current?.unsubscribe(); } catch {}
-    try { client.deactivate(); } catch {}
+    try { clientRef.current?.deactivate(); } catch {}
     subRef.current = null;
     clientRef.current = null;
-  };
-}, [sessionId, setMsgs]);
 
+    // 시스템 안내 메시지 추가
+    setMsgs((prev) => [
+      ...prev,
+      {
+        id: Date.now() + 2,
+        role: "system",
+        text: "채팅이 종료되었습니다. 📊 분석 보기를 눌러 결과를 확인하세요.",
+        ts: new Date(),
+      },
+    ]);
+  };
+
+  /* ===== 메시지 전송 ===== */
   const handleSend = (e) => {
     e?.preventDefault?.();
+    if (ended) return; // ★ 종료 후 전송 불가
+
     const text = input.trim();
     if (!text) return;
 
@@ -133,7 +160,7 @@ useEffect(() => {
       return;
     }
 
-    // 내 메시지 즉시 렌더
+    // 내 메시지 즉시 반영
     setMsgs((prev) => [
       ...prev,
       { id: Date.now(), role: "user", text, ts: new Date() },
@@ -152,7 +179,7 @@ useEffect(() => {
       setTyping(true); // 서버 응답 대기 UI
       sendMessage(clientRef.current, normalizeWSSend({ sessionId, text }));
     } else {
-      // 오프라인(WS 미연결) 더미 응답 유지
+      // 오프라인(WS 미연결)
       setTyping(true);
       setTimeout(() => {
         setTyping(false);
@@ -172,6 +199,7 @@ useEffect(() => {
   const outOfQuota = !!sessionId && sentCount >= PER_SESSION_LIMIT;
   const avatarEmoji = opponent.gender === "male" ? "👨" : opponent.gender === "female" ? "👩" : "👤";
 
+  // 렌더링
   return (
     <Wrap>
       <ChatHeader>
@@ -191,45 +219,67 @@ useEffect(() => {
         </Left>
 
         <Right>
-          {sessionId && (
-            <Quota title="이 세션에서 보낼 수 있는 남은 횟수">
-              {PER_SESSION_LIMIT - sentCount} / {PER_SESSION_LIMIT}
-            </Quota>
+          {ended ? (
+            <AnalyzeBtn
+              type="button"
+              onClick={() => navigate("/analysis", { state: { sessionId, name: opponent.name } })}
+              disabled={!sessionId}
+              title={sessionId ? "" : "세션 정보가 없어요"}
+            >
+              📊 분석 보기
+            </AnalyzeBtn>
+          ) : (
+            <>
+              {sessionId && (
+                <Quota title="이 세션에서 보낼 수 있는 남은 횟수">
+                  {PER_SESSION_LIMIT - sentCount} / {PER_SESSION_LIMIT}
+                </Quota>
+              )}
+              <EndBtn type="button" onClick={endChat} title="채팅을 종료하고 분석으로 이동할 수 있어요">
+                채팅 종료
+              </EndBtn>
+            </>
           )}
-          <AnalyzeBtn
-            type="button"            
-            onClick={() => navigate("/analysis", { state: { sessionId, name: opponent.name } })}
-            disabled={!sessionId}
-            title={sessionId ? "" : "세션 정보가 없어요"}
-          >
-            📊 분석 보기
-          </AnalyzeBtn>
         </Right>
       </ChatHeader>
 
       <MessagesArea>
-        {msgs.map((m) =>
-          m.role === "ai" ? (
-            <Row key={m.id}>
-              <Avatar $sm aria-hidden>{avatarEmoji}</Avatar>
-              <BubbleAI>
-                {m.text}
-                <Time>{formatTime(m.ts)}</Time>
-              </BubbleAI>
-            </Row>
-          ) : (
-            <RowMine key={m.id}>
-              <BubbleMe>
-                {m.text}
-                <Time $me>{formatTime(m.ts)}</Time>
-              </BubbleMe>
-            </RowMine>
-          )
-        )}
+        {msgs.map((m) => {
+          if (m.role === "ai") {
+            return (
+              <Row key={m.id}>
+                <Avatar $sm aria-hidden>{avatarEmoji}</Avatar>
+                <BubbleAI>
+                  {m.text}
+                  <Time>{formatTime(m.ts)}</Time>
+                </BubbleAI>
+              </Row>
+            );
+          } else if (m.role === "system") {
+            return (
+              <Row key={m.id}>
+                <Avatar $sm aria-hidden>ℹ️</Avatar>
+                <BubbleSystem>
+                  {m.text}
+                  <Time>{formatTime(m.ts)}</Time>
+                </BubbleSystem>
+              </Row>
+            );
+          } else {
+            return (
+              <RowMine key={m.id}>
+                <BubbleMe>
+                  {m.text}
+                  <Time $me>{formatTime(m.ts)}</Time>
+                </BubbleMe>
+              </RowMine>
+            );
+          }
+        })}
 
         {/* AI 타이핑 로딩 */}
         {typing && (
-          <Row>            
+          <Row>
             <Avatar aria-hidden>{avatarEmoji}</Avatar>
             <TypingBubble>
               <Dot />
@@ -243,16 +293,26 @@ useEffect(() => {
       </MessagesArea>
 
       <InputBar onSubmit={handleSend}>
-      
         <MsgInput
-          placeholder="메시지를 입력하세요..."
+          placeholder={ended ? "채팅이 종료되었습니다." : "메시지를 입력하세요..."}
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
-          disabled={outOfQuota}
-          title={outOfQuota ? "이 세션의 발화 제한(10회)을 모두 사용했습니다." : ""}
+          disabled={outOfQuota || ended}
+          title={
+            ended
+              ? "채팅 종료 상태입니다."
+              : outOfQuota
+              ? "이 세션의 발화 제한(10회)을 모두 사용했습니다."
+              : ""
+          }
         />
-        <SendBtn type="submit" aria-label="전송" disabled={outOfQuota} title={outOfQuota ? "제한 초과" : ""}>
+        <SendBtn
+          type="submit"
+          aria-label="전송"
+          disabled={outOfQuota || ended}
+          title={ended ? "채팅 종료 상태" : outOfQuota ? "제한 초과" : ""}
+        >
           ✈
         </SendBtn>
       </InputBar>
@@ -282,9 +342,9 @@ const CONTENT_MAX_W = 1100;
 /* ===== styles (grid) ===== */
 const Wrap = styled.section`
   height: calc(100vh - ${TOPBAR_H}px);
-  padding-top: ${TOPBAR_H + EXTRA_GAP}px;    /* 탑바 아래로 전체 컨텐츠 내림 */
+  padding-top: ${TOPBAR_H + EXTRA_GAP}px;
   display: grid;
-  grid-template-rows: ${CHAT_HEADER_H}px 1fr ${INPUT_BAR_H}px;  /* 헤더 / 메시지 / 입력바 */
+  grid-template-rows: ${CHAT_HEADER_H}px 1fr ${INPUT_BAR_H}px;
   background: #fff;
 `;
 
@@ -296,16 +356,14 @@ const ChatHeader = styled.header`
   padding: 0 16px;
   background: linear-gradient(180deg, rgba(255,183,213,.35), rgba(255,183,213,.15), #fff 80%);
   border-bottom: 1px solid rgba(0,0,0,.04);
-
-  /* ✅ 가운데 정렬 + 최대폭 제한 */
   width: min(${CONTENT_MAX_W}px, 96vw);
   margin: 0 auto;
 `;
 
 const Left = styled.div`
   display: flex; 
-  align-items: 
-  center; gap: 10px;
+  align-items: center; 
+  gap: 10px;
 `;
 
 const Right = styled.div``;
@@ -350,21 +408,19 @@ const HeaderInfo = styled.div`
 `;
 
 const Name = styled.div` 
-font-weight: 800; 
-color: #111; 
+  font-weight: 800; 
+  color: #111; 
 `;
 
 const Sub = styled.div` 
-font-size: 12px; 
-color: #888; 
+  font-size: 12px; 
+  color: #888; 
 `;
 
 const MessagesArea = styled.div`
   grid-row: 2;
   overflow-y: auto;
   padding: 16px 16px 24px;
-
-  /* ✅ 가운데 정렬 + 최대폭 제한 */
   width: min(${CONTENT_MAX_W}px, 96vw);
   margin: 0 auto;
 `;
@@ -392,8 +448,14 @@ const BubbleAI = styled.div`
   position: relative;
 `;
 
+const BubbleSystem = styled(BubbleAI)`
+  background: #fff6f8;
+  border: 1px dashed #ffb7d5;
+  color: #b91c1c;
+`;
+
 const BubbleMe = styled(BubbleAI)`
-  background: #0f172a;  /* 딥 네이비 */
+  background: #0f172a;
   color: #fff;
   border-radius: 12px 12px 6px 12px;
 `;
@@ -436,8 +498,6 @@ const InputBar = styled.form`
   padding: 10px 16px;
   background: #fff;
   border-top: 1px solid rgba(0,0,0,.06);
-
-  /* ✅ 가운데 정렬 + 최대폭 제한 */
   width: min(${CONTENT_MAX_W}px, 96vw);
   margin: 0 auto;
 `;
@@ -480,4 +540,10 @@ const AnalyzeBtn = styled.button`
   font-size: 13px; 
   font-weight: 700;
   &:hover { background: #f9fafb; }
+`;
+
+const EndBtn = styled(AnalyzeBtn)`
+  border-color: #ffb3c9;
+  color: #ff2f79;
+  &:hover { background: #fff5f9; }
 `;
