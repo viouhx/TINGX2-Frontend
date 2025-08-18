@@ -22,7 +22,7 @@ export const updateNickname = (nickname) =>
 export const changePassword = ({ oldPassword, newPassword }) =>
   http.put(`/api/users/me/password`, { oldPassword, newPassword });
 
-// (참고) 세션/로그는 백엔드에서 /api/chat/.. 로 구현되어 있어요
+//세션/로그는 백엔드에서 /api/chat/.. 로 구현
 export const getChatSessions = () => http.get(`/api/chat/sessions`);
 export const getChatLogs = (sessionId) =>
   http.get(`/api/chat/sessions/${sessionId}/logs`);

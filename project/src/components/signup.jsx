@@ -5,7 +5,7 @@ import styled from "styled-components";
 import {
   requestEmailVerification,
   confirmEmailVerification,
-  signUp,            // ✅ 회원가입 API 추가
+  signUp,
 } from "../api/auth";
 
 const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -21,28 +21,39 @@ const Signup = () => {
   const [gender, setGender] = useState(""); // 'male' | 'female'
   const [job, setJob] = useState("");
 
+  // (선택) 중복확인 상태 — 실제 API 없으니 로컬 스위치로 유지
   const [emailChecked, setEmailChecked] = useState(false);
   const [nickChecked, setNickChecked] = useState(false);
 
-  // ✅ 이메일 인증 관련
-  const [emailVerifySent, setEmailVerifySent] = useState(false); // 인증 메일 발송됨
-  const [emailVerified, setEmailVerified] = useState(false);     // 인증 완료됨
+  // 이메일 인증 상태
+  const [emailVerifySent, setEmailVerifySent] = useState(false);
+  const [emailVerified, setEmailVerified] = useState(false);
+  const [lockedEmail, setLockedEmail] = useState(""); // ← 인증 당시 이메일을 고정 저장
   const [code, setCode] = useState("");
   const [sending, setSending] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
   const [showDone, setShowDone] = useState(false);
-  const [submitting, setSubmitting] = useState(false); // ✅ 회원가입 버튼 로딩
+  const [submitting, setSubmitting] = useState(false);
 
   // 유효성
-  const emailValid = useMemo(() => emailRegex.test(email), [email]);
-  const nickValid = useMemo(() => nickname.trim().length >= 2 && nickname.trim().length <= 7, [nickname]);
-  const pwdValid = useMemo(() => pwd.trim().length >= 6, [pwd]); // 예시 규칙
+  const emailValid = useMemo(
+    () => emailRegex.test(email.trim().toLowerCase()),
+    [email]
+  );
+  const nickValid = useMemo(
+    () => nickname.trim().length >= 2 && nickname.trim().length <= 7,
+    [nickname]
+  );
+  const pwdValid = useMemo(() => pwd.trim().length >= 6, [pwd]);
   const pwdSame = useMemo(() => pwd !== "" && pwd === pwd2, [pwd, pwd2]);
   const birthValid = useMemo(() => birth.trim() !== "", [birth]);
-  const genderValid = useMemo(() => gender === "male" || gender === "female", [gender]);
+  const genderValid = useMemo(
+    () => gender === "male" || gender === "female",
+    [gender]
+  );
 
-  // 최종 버튼 활성 조건: 모든 필드 채움 + 유효 + 중복확인 + ✅ 이메일 인증 완료
+  // 최종 버튼 활성 조건
   const canSubmit =
     emailValid &&
     nickValid &&
@@ -54,31 +65,36 @@ const Signup = () => {
     nickChecked &&
     emailVerified;
 
+  // 이메일 "중복확인" (실제 API가 없다면 로컬 확인만)
   const handleEmailCheck = () => {
     if (!emailValid) return;
-    // TODO: 이메일 중복 체크 API 붙이기
     setEmailChecked(true);
-    alert("사용 가능한 이메일입니다.");
+    alert("이메일 형식 확인 완료(서버 중복확인 API 없음).");
   };
 
+  // 닉네임 "중복확인" (실제 API가 없다면 로컬 확인만)
   const handleNickCheck = () => {
     if (!nickValid) return;
-    // TODO: 닉네임 중복 체크 API 붙이기
     setNickChecked(true);
-    alert("사용 가능한 닉네임입니다.");
+    alert("닉네임 형식 확인 완료(서버 중복확인 API 없음).");
   };
 
-  // ✅ 인증 메일 보내기 (실제 API 연동)
+  // 인증 메일 보내기
   const handleSendVerifyEmail = async () => {
     if (!emailChecked || !emailValid || sending) return;
     try {
       setSending(true);
-      const { data } = await requestEmailVerification(email);
-      // data: { success:boolean, message:string }
+      const normalized = email.trim().toLowerCase(); // ← 항상 소문자/트림
+      const { data } = await requestEmailVerification(normalized);
+      // ResponseDto: { success:boolean, message:string }
       if (data?.success) {
+        setLockedEmail(normalized);     // ← 이 시점의 이메일을 고정
         setEmailVerifySent(true);
+        setEmailVerified(false);
         alert(data?.message || "인증 메일을 보냈습니다. 메일함에서 코드를 확인하세요.");
       } else {
+        setEmailVerifySent(false);
+        setEmailVerified(false);
         alert(data?.message || "인증 메일 발송에 실패했습니다.");
       }
     } catch (e) {
@@ -89,16 +105,21 @@ const Signup = () => {
     }
   };
 
-  // ✅ 코드 확인 (실제 API 연동)
+  // 인증코드 확인
   const handleConfirmEmail = async () => {
     if (!emailVerifySent || !code.trim() || confirming) return;
+    if (!lockedEmail) return alert("먼저 인증코드를 전송해 주세요.");
     try {
       setConfirming(true);
-      const { data } = await confirmEmailVerification({ email, code: code.trim() });
+      const { data } = await confirmEmailVerification({
+        email: lockedEmail, // ← 반드시 lockedEmail로 확인
+        code: code.trim(),
+      });
       if (data?.success) {
         setEmailVerified(true);
         alert(data?.message || "이메일 인증이 완료되었습니다.");
       } else {
+        setEmailVerified(false);
         alert(data?.message || "인증에 실패했습니다. 코드를 다시 확인해주세요.");
       }
     } catch (e) {
@@ -109,68 +130,77 @@ const Signup = () => {
     }
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  if (!canSubmit || submitting) return;
+  // 회원가입 제출
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!canSubmit || submitting) return;
 
-  // birth(yyyy-mm-dd) → age(만 나이 대충 계산; 문자열로)
-   const calcAge = (b) => {
-     try {
-       const y = parseInt(b.slice(0, 4), 10);
-       if (!y) return "";
-       const nowY = new Date().getFullYear();
-       return String(nowY - y);
-     } catch {
-       return "";
-     }
-   };
-
-  try {
-    setSubmitting(true);
-    // ⚠️ 서버 필드명이 다르면 여기서 키를 맞춰주세요(예: birthDate/sex 등)
-    const payload = {
-      email,
-      password: pwd,
-      nickname,
-       gender,
-       age: calcAge(birth), // ✅ 서버 DTO에 맞춤
-       job: "",            // ✅ 일단 공란으로 전달 (필수 X). UI 추가시 setJob 값 사용
+    // birth(yyyy-mm-dd) → 대략적인 나이(문자열)
+    const calcAge = (b) => {
+      try {
+        const y = parseInt(b.slice(0, 4), 10);
+        if (!y) return "";
+        const nowY = new Date().getFullYear();
+        return String(nowY - y);
+      } catch {
+        return "";
+      }
     };
 
-    const res = await signUp(payload);
-    const { status, data } = res || {};
+    const normalized = email.trim().toLowerCase();
 
-    // 서버가 {success, message}를 주는 경우/안 주는 경우 모두 커버
-    if (data?.success === false) {
-      alert(data?.message || "회원가입에 실패했습니다.");
-      return;
-    }
-    if (status >= 400) {
-      alert("회원가입에 실패했습니다.");
-      return;
+    // 인증된 이메일과 제출 이메일이 일치해야 함
+    if (!emailVerified || normalized !== lockedEmail) {
+      return alert("이메일 인증을 완료했는지, 인증한 주소와 동일한지 확인해 주세요.");
     }
 
-    setShowDone(true);
-    setTimeout(() => {
-      setShowDone(false);
-      navigate("/login");
-    }, 1200);
-  } catch (err) {
-    console.error(err);
-    // 서버에서 메시지를 내려주면 표시
-    const msg = err?.response?.data?.message || "회원가입 실패(네트워크/CORS/서버 오류)";
-    alert(msg);
-  } finally {
-    setSubmitting(false);
-  }
-};
+    try {
+      setSubmitting(true);
+      // 백엔드 DTO 불확실성 대비: 넓게 맞춰서 보냄(추가 필드 무시되어도 OK)
+      const payload = {
+        email: lockedEmail,
+        password: pwd,
+        nickname,
+        gender,
+        birth,              // 날짜 원문
+        birthDate: birth,   // 다른 키로 받을 수도 있음
+        age: calcAge(birth),
+        job: job || "",
+      };
 
-  // 입력이 바뀌면 다시 중복확인/인증 필요
+      const res = await signUp(payload);
+      const { status, data } = res || {};
+
+      if (data?.success === false) {
+        return alert(data?.message || "회원가입에 실패했습니다.");
+      }
+      if (status >= 400) {
+        return alert("회원가입에 실패했습니다.");
+      }
+
+      setShowDone(true);
+      setTimeout(() => {
+        setShowDone(false);
+        navigate("/login");
+      }, 1200);
+    } catch (err) {
+      console.error(err);
+      const msg =
+        err?.response?.data?.message ||
+        "회원가입 실패(네트워크/CORS/서버 오류)";
+      alert(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // 입력 변경 시 상태 초기화
   const onChangeEmail = (v) => {
     setEmail(v);
     setEmailChecked(false);
     setEmailVerifySent(false);
     setEmailVerified(false);
+    setLockedEmail(""); // ← 다른 주소로 바꾸면 인증 다시
     setCode("");
   };
   const onChangeNick = (v) => {
@@ -207,16 +237,22 @@ const Signup = () => {
         </Inline>
         {email !== "" && (
           <Hint ok={emailValid}>
-            {emailValid ? "사용 가능한 이메일입니다." : "이메일 형식이 올바르지 않습니다."}
+            {emailValid
+              ? "이메일 형식 확인 완료"
+              : "이메일 형식이 올바르지 않습니다."}
           </Hint>
         )}
 
-        {/* ✅ 이메일 인증 흐름 */}
+        {/* 이메일 인증 흐름 */}
         {emailChecked && (
           <>
             {!emailVerifySent && !emailVerified && (
               <RightAlign>
-                <SmallBtn type="button" onClick={handleSendVerifyEmail} disabled={sending}>
+                <SmallBtn
+                  type="button"
+                  onClick={handleSendVerifyEmail}
+                  disabled={sending}
+                >
                   {sending ? "전송중..." : "이메일 인증"}
                 </SmallBtn>
               </RightAlign>
@@ -251,7 +287,9 @@ const Signup = () => {
                     인증 완료
                   </SmallBtn>
                 </RightAlign>
-                <Hint ok={true}>이메일 인증이 완료되었습니다.</Hint>
+                <Hint ok={true}>
+                  이메일 인증이 완료되었습니다. (인증 주소: {lockedEmail})
+                </Hint>
               </>
             )}
           </>
@@ -274,7 +312,9 @@ const Signup = () => {
         </Inline>
         {nickname !== "" && (
           <Hint ok={nickValid}>
-            {nickValid ? "사용 가능한 닉네임입니다." : "닉네임은 2~7자여야 합니다."}
+            {nickValid
+              ? "닉네임 형식 확인 완료"
+              : "닉네임은 2~7자여야 합니다."}
           </Hint>
         )}
 
@@ -294,7 +334,9 @@ const Signup = () => {
           autoComplete="new-password"
         />
         {pwd2 !== "" && (
-          <Hint ok={pwdSame}>{pwdSame ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}</Hint>
+          <Hint ok={pwdSame}>
+            {pwdSame ? "비밀번호가 일치합니다." : "비밀번호가 일치하지 않습니다."}
+          </Hint>
         )}
 
         {/* 생년월일 */}
@@ -323,7 +365,7 @@ const Signup = () => {
         </GenderRow>
 
         <PrimaryBtn type="submit" disabled={!canSubmit || submitting}>
-            {submitting ? "가입 중..." : "회원가입"}
+          {submitting ? "가입 중..." : "회원가입"}
         </PrimaryBtn>
       </Card>
 
@@ -348,18 +390,27 @@ const Bg = styled.main`
 `;
 
 const Top = styled.div`
-  position: absolute; top: 28px; left: 0; right: 0;
-  display: flex; justify-content: center;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
 `;
 
 const Logo = styled.h2`
-  color: #fff; font-size: clamp(24px, 3.8vw, 36px);
+  color: #fff;
+  font-size: clamp(24px, 3.8vw, 36px);
   text-shadow: 0 6px 16px rgba(0,0,0,.18), 0 2px 0 rgba(255,255,255,.35);
 `;
 
 const BackLink = styled(Link)`
-  position: absolute; top: 8px; right: min(4vw, 24px);
-  color: rgba(255,255,255,.95); font-weight: 700; text-decoration: none;
+  position: absolute;
+  top: 8px;
+  right: min(4vw, 24px);
+  color: rgba(255,255,255,.95);
+  font-weight: 700;
+  text-decoration: none;
 `;
 
 const Card = styled.section`
@@ -464,6 +515,8 @@ const ModalBG = styled.div`
 `;
 
 const ModalCard = styled.div`
-  background: #fff; padding: 18px 22px; border-radius: 12px;
+  background: #fff;
+  padding: 18px 22px;
+  border-radius: 12px;
   font-weight: 800;
 `;

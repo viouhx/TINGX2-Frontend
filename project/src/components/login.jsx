@@ -36,8 +36,13 @@ const Login = ({ onLogin }) => {
 
     try {
       setLoading(true);
-      // 1) 일반 로그인 (쿠키 기반: http.js에 withCredentials:true 이미 설정)
-      await signIn({ email, password });
+    // 1) 일반 로그인
+     const { data } = await signIn({ email, password });
+     // ✅ 토큰이 응답에 있으면 저장 (http.js 인터셉터가 이후 요청에 자동 부착)
+     const token = data?.accessToken || data?.token || data?.access_token;
+     if (token) {
+       localStorage.setItem("accessToken", token);
+     }  
 
       // 2) (선택) 로그인 직후 내 정보 확인
       try {

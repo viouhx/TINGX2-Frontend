@@ -266,7 +266,7 @@ export default function Analysis() {
           <Card>
             <CardHead>
               <CardIcon>🛠</CardIcon>
-              <CardTitle>보완할 점</CardTitle>
+              <CardTitle>보완할  점</CardTitle>
             </CardHead>
             {improvements.length ? (
               <List>
