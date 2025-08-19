@@ -338,7 +338,7 @@ export default function Main() {
               <FootTitle>Contact</FootTitle>
               <Small>📞 010-4709-2597</Small>
               <Small>✉ asb0729@naver.com</Small>
-              <Small>📍 뉴욕 자유의 여신상 앞 벤치</Small>
+              <Small>📍 대한민국, 서울</Small>
               <Small>🕘 평일 09:00 ~ 18:00 (주말/공휴일 휴무)</Small>
             </div>
 
