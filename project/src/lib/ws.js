@@ -5,8 +5,8 @@ import SockJS from "sockjs-client";
 
 // ---- 환경 변수 (필요 시 .env.* 에서 덮어쓰기) ----
 const RAW_WS_URL =
-  process.env.REACT_APP_WS_URL ||
-  `${window.location.origin.replace(/:\d+$/, ":8080")}/ws/chat`;
+   process.env.REACT_APP_WS_URL ||
+   `${window.location.origin.replace(/:\d+$/, ":8080")}/ws`;
 
 // 토픽 프리픽스와 발행 경로도 오버라이드 가능하게
 const TOPIC_PREFIX = process.env.REACT_APP_WS_TOPIC_PREFIX || "/topic/chat";
@@ -14,17 +14,30 @@ const APP_DEST     = process.env.REACT_APP_WS_APP_DEST     || "/app/send";
 
 // /ws 로 끝나면 /chat 자동 덧붙임
 function resolveWSUrl(raw) {
-  let u = String(raw || "").trim();
-  if (!u) return `${window.location.origin.replace(/:\d+$/, ":8080")}/ws/chat`;
-  if (u.endsWith("/ws")) u += "/chat";
-  return u;
-}
+   let u = String(raw || "").trim();
+   if (!u) u = `${window.location.origin.replace(/:\d+$/, ":8080")}/ws`;
+   if (u.endsWith("/ws")) u += "/chat";   // ★ 유지: 서버가 /ws/chat 로 열려있을 때 대응
+   return u.replace(/\/+$/, "");          // 끝의 / 정리
+ }
 
 export const WS_URL = resolveWSUrl(RAW_WS_URL);
 
 export function createStompClient({ url = WS_URL, onConnect, onError }) {
+  const token =
+    localStorage.getItem("accessToken") || sessionStorage.getItem("accessToken");
+
   const client = new Client({
-    webSocketFactory: () => new SockJS(url),
+    // XHR 전송에서 쿠키 포함
+    webSocketFactory: () =>
+      new SockJS(url, null, {
+        transports: ["websocket", "xhr-streaming", "xhr-polling"],
+        transportOptions: {
+          "xhr-streaming": { withCredentials: true },
+          "xhr-polling": { withCredentials: true },
+        },
+      }),
+    // 서버가 STOMP CONNECT에서 Authorization 검사하는 경우 대비
+    connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
     reconnectDelay: 2000,
     onConnect,
     onStompError: (frame) => {
