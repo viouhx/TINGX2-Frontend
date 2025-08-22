@@ -20,66 +20,58 @@ function toYmdDot(d) {
  * 서버 응답을 화면에서 쓰기 쉽게 표준화(기본 문구/추정값 없음)
  */
 function normalizeSession(s = {}) {
-  const id =
-    s.sessionId ?? s.id ?? s.session_id ?? s.sessionID ?? null;
+  const id = s.sessionId ?? s.id ?? s.session_id ?? s.sessionID ?? null;
+  const baseName = s.name ?? s.partnerName ?? s.opponentName ?? s.targetName ?? s.aiName ?? "상대방";
 
-  const name =
-    s.name ??
-    s.partnerName ??
-    s.opponentName ??
-    s.targetName ??
-    s.aiName ??
-    "상대방";
+  const pick = (...vals) => vals.find(v => v !== undefined && v !== null && String(v).trim?.() !== "");
+  const toKorGender = (g) => {
+    const x = String(g || "").toLowerCase();
+    if (["male","m","남","남자"].includes(x)) return "남자";
+    if (["female","f","여","여자"].includes(x)) return "여자";
+    return String(g || "-");
+  };
+  const toNum = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
 
-  const gender =
-    s.gender ?? s.partnerGender ?? s.aiGender ?? "-";
+  const c = s.condition || s.conditions || {};
+  const a = s.analysis || s.lastAnalysis || {};
+  const cache = (() => {
+    try { return JSON.parse(localStorage.getItem(`analysisCache.${id}`) || "null"); } catch { return null; }
+  })() || {};
 
-  const age = Number(
-    s.age ?? s.partnerAge ?? s.aiAge ?? ""
-  ) || null;
+  const genderRaw = pick(s.gender, s.partnerGender, s.aiGender,
+   c.aiGender, a.partnerGender, a.gender,
+   cache.partnerGender, cache.gender, cache.aiGender);
+  const ageRaw = pick(s.age, s.partnerAge, s.aiAge,
+   c.aiAge, a.partnerAge, a.age,
+   cache.partnerAge, cache.age, cache.aiAge);
+  const jobRaw = pick(s.job, s.partnerJob, s.aiJob,
+   c.aiJob, a.partnerJob, a.job,
+   cache.partnerJob, cache.job, cache.aiJob);
+  const msgCount = pick(s.messageCount, s.msgCount, s.totalMessages, s.message_count, s.messages?.length, s.chatLogs?.length) ?? 0;
 
-  const job =
-    s.job ?? s.partnerJob ?? s.aiJob ?? "";
+  const liked = pick(s.favorability, s.likeability, s.likeabilityScore, s.favorabilityScore, a.favorability, a.likeability, a.likeabilityScore, a.favorabilityScore, cache.favorabilityScore, cache.likeabilityScore, cache.likeability) ?? null;
+  const total = pick(s.totalScore, s.overallScore, a.totalScore, a.overallScore, cache.totalScore, cache.overallScore) ?? null;
 
-  const msgCount =
-    s.messageCount ?? s.msgCount ?? s.totalMessages ?? 0;
+  const summaryRaw = pick(s.summary, s.oneLiner, s.oneLineSummary, a.oneLiner, a.summary, cache.oneLiner, cache.summary);
+  const tagRaw = pick(s.tag, s.partnerTrait, a.partnerTrait, cache.partnerTrait);
 
-  // 점수: 서버가 안 주면 null로 둠(표시 X)
-  const liked =
-    s.favorability ??
-    s.likeability ??
-    s.likeabilityScore ??
-    s.favorabilityScore ??
-    null;
-
-  const total =
-    s.totalScore ?? s.overallScore ?? null;
-
-  // 요약/태그: 서버가 안 주면 표시하지 않음
-  const summaryRaw =
-    s.summary ?? s.oneLiner ?? s.oneLineSummary ?? null;
-  const tagRaw =
-    s.tag ?? s.partnerTrait ?? null;
-
-  const summary =
-    typeof summaryRaw === "string" && summaryRaw.trim() ? summaryRaw.trim() : null;
-  const tag =
-    typeof tagRaw === "string" && tagRaw.trim() ? tagRaw.trim() : null;
-
-  const createdAt =
-    s.createdAt ?? s.created_at ?? s.startedAt ?? null;
+  const createdAt = s.createdAt ?? s.created_at ?? s.startedAt ?? null;
 
   return {
     id,
-    name: `${name}님과의 대화`,
-    gender: gender === "male" ? "남자" : gender === "female" ? "여자" : String(gender || "-"),
-    age,
-    job,
+    name: `${baseName}님과의 대화`,
+    gender: toKorGender(genderRaw),
+    age: toNum(ageRaw),
+    job: jobRaw || "-",
     msgCount,
-    liked,        // null 가능
-    total,        // null 가능
-    summary,      // null 가능
-    tag,          // null 가능
+    liked,
+    total,
+    summary: typeof summaryRaw === "string" && summaryRaw.trim() ? summaryRaw.trim() : null,
+    tag: typeof tagRaw === "string" && tagRaw.trim() ? tagRaw.trim() : null,
     date: createdAt ? toYmdDot(createdAt) : "",
     _raw: s,
   };

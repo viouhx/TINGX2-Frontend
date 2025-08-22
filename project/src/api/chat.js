@@ -38,4 +38,15 @@ export const getChatLogs = (sessionId) =>
 
 /** 분석 요청: POST /api/chat/analysis (body: { sessionId }) */
 export const requestAnalysis = (sessionId) =>
-  http.post(`/api/chat/analysis`, { sessionId });
+  http.post(`/api/chat/analysis`, { sessionId }, { timeout: 0 });
+
+// ✅ 분석 결과 조회(백엔드 어느 쪽이든 받게 두 가지 경로 시도)
+export const fetchAnalysis = async (sessionId) => {
+  try {
+    // 1안: /api/chat/analysis?sessionId=...
+    return await http.get(`/api/chat/analysis`, { params: { sessionId } });
+  } catch (e1) {
+    // 2안: /api/chat/sessions/{id}/analysis
+    return await http.get(`/api/chat/sessions/${sessionId}/analysis`);
+  }
+};

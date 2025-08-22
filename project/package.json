@@ -1,6 +1,7 @@
 {
   "name": "landingpage-react-template",
   "private": true,
+  "proxy": "http://43.202.212.67:8080",
   "dependencies": {
     "@stomp/stompjs": "^7.1.1",
     "@testing-library/jest-dom": "^4.2.4",
@@ -37,4 +38,6 @@
       "last 1 safari version"
     ]
   }
+  
 }
+

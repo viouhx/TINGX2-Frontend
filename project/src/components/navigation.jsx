@@ -1,24 +1,52 @@
 // src/components/navigation.jsx
-import React from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState, useCallback } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import styled from "styled-components";
-import { signOut } from "../api/auth";
+import { getMe, signOut } from "../api/auth";
 
-export const Navigation = ({ isLoggedIn, onLogout, userName = "사용자님" }) => {
+export const Navigation = ({ isLoggedIn, onLogout }) => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const [me, setMe] = useState(null);
+
+  const normalizeName = (d) =>
+    d?.nickname ?? d?.nickName ?? d?.usNickname ?? null;
+
+  const fetchMe = useCallback(async () => {
+    try {
+      const { data } = await getMe();
+      setMe(data);
+    } catch {
+      setMe(null);
+    }
+  }, []);
+
+  // 1) 처음 마운트 + isLoggedIn 변경 + 경로 변경 때마다 다시 조회
+  useEffect(() => {
+    fetchMe();
+  }, [fetchMe, isLoggedIn, location.pathname]);
+
+  // 2) 로그인 직후 트리거(아래 B에서 이벤트 발생시킴)
+  useEffect(() => {
+    const handler = () => fetchMe();
+    window.addEventListener("auth:changed", handler);
+    return () => window.removeEventListener("auth:changed", handler);
+  }, [fetchMe]);
 
   const doLogout = async () => {
     try {
-      // 서버 세션/쿠키 정리
       await signOut();
     } catch (e) {
       console.error("signOut failed:", e?.response || e);
-      // 서버 에러가 나도 클라이언트 상태는 정리해 사용자 경험 보장
     } finally {
-      onLogout?.();       // App 상태 초기화 (isLoggedIn=false 등)
-      navigate("/login"); // 로그인 페이지로
+      setMe(null);
+      onLogout?.();
+      navigate("/login");
     }
   };
+
+  const logged = !!me || isLoggedIn;
+  const displayName = normalizeName(me) ? `${normalizeName(me)}님` : "사용자님";
 
   return (
     <TopBar>
@@ -26,7 +54,7 @@ export const Navigation = ({ isLoggedIn, onLogout, userName = "사용자님" }) 
         <Brand to="/main">TINGTING</Brand>
 
         <Right>
-          {!isLoggedIn ? (
+          {!logged ? (
             <>
               <NavLink to="/login">로그인</NavLink>
               <Divider />
@@ -34,7 +62,7 @@ export const Navigation = ({ isLoggedIn, onLogout, userName = "사용자님" }) 
             </>
           ) : (
             <>
-              <Muted>{userName}</Muted>
+              <Muted>{displayName}</Muted>
               <Divider />
               <Icon aria-hidden>👤</Icon>
               <NavLink to="/mypage">마이페이지</NavLink>
