@@ -1,20 +1,33 @@
 // src/lib/http.js
 import axios from "axios";
 
-const API_BASE =
-  process.env.REACT_APP_API_BASE ||
-  process.env.REACT_APP_API_BASE_URL ||
-  "http://localhost:8080"; // ← 로컬 기본값 유지
-
 const http = axios.create({
-  baseURL: API_BASE,
-  withCredentials: true, // 쿠키 인증 필수
+  baseURL: "", // ★ 항상 상대경로. 절대 금지
+  withCredentials: true,
   headers: { "Content-Type": "application/json" },
   timeout: 15000,
 });
 
-// ★ 요청마다 로컬 토큰을 Authorization 헤더로 추가 (있으면)
+// ★ 절대 URL을 강제로 상대경로로 변환하는 방어막
 http.interceptors.request.use((config) => {
+  // baseURL에 절대주소가 들어오면 제거
+  if (/^https?:\/\//i.test(config.baseURL || "")) {
+    config.baseURL = "";
+  }
+  // url이 절대주소면 path(+query/hash)만 남기기
+  if (/^https?:\/\//i.test(config.url || "")) {
+    try {
+      const u = new URL(config.url);
+      config.url = u.pathname + u.search + u.hash;
+    } catch {
+      // URL 파싱 실패 시 그대로 둡니다.
+    }
+  }
+
+  // (선택) 최종 확인 로그 — 문제 추적용. 되도록 잠깐만 사용.
+  // console.log("[REQ]", { baseURL: config.baseURL, url: config.url });
+
+  // 토큰 헤더(있을 때만)
   const token =
     localStorage.getItem("accessToken") ||
     sessionStorage.getItem("accessToken");
@@ -28,7 +41,6 @@ http.interceptors.response.use(
   (res) => res,
   (err) => {
     console.error("[HTTP ERROR]", err?.response || err);
-    //상태코드별 정리, 전역 토스트/로그아웃 처리 등
     return Promise.reject(err);
   }
 );

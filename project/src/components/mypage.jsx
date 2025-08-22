@@ -16,7 +16,6 @@ function toYmdDot(d) {
   }
 }
 
-/** 백엔드 UserDto → 화면용으로 통일 */
 function normalizeProfile(d = {}) {
   const nickname = d.nickname ?? d.nickName ?? d.usNickname ?? d.name ?? "";
   const email = d.email ?? d.usEmail ?? d.userEmail ?? "";
@@ -29,9 +28,8 @@ function normalizeProfile(d = {}) {
       ? "남자"
       : rawGender === "female" || rawGender === "f" || rawGender === "여"
       ? "여자"
-      : (d.gender || "-");
+      : d.gender || "-";
 
-  // 서버가 '나이'를 usAge/age로 줄 수도, 생일을 birth/birthDate로 줄 수도 있어 방어적으로 처리
   const ageOrBirth =
     d.age ??
     d.usAge ??
@@ -44,53 +42,142 @@ function normalizeProfile(d = {}) {
   return { nickname, email, gender, birth: ageOrBirth };
 }
 
-/**
- * 최근 대화 카드용 표준화(기본 문구/추정값 제거)
- */
+/** 최근 대화 카드에 뿌릴 표준화 */
 function normSession(s = {}) {
   const id = s.sessionId ?? s.id ?? null;
   const partner =
     s.partnerName ?? s.opponentName ?? s.targetName ?? s.aiName ?? "상대방";
 
-  const liked =
-    s.favorability ??
-    s.likeability ??
-    s.likeabilityScore ??
-    s.favorabilityScore ??
-    null;
+  // 유효값 첫 번째 고르기
+  const pick = (...vals) =>
+    vals.find(
+      (v) => v !== undefined && v !== null && String(v).trim?.() !== ""
+    );
 
-  const total = s.totalScore ?? s.overallScore ?? null;
+  const toKorGender = (g) => {
+    const x = String(g || "").toLowerCase();
+    if (["male", "m", "남", "남자"].includes(x)) return "남자";
+    if (["female", "f", "여", "여자"].includes(x)) return "여자";
+    return String(g || "-");
+  };
 
-  const gender = s.gender ?? s.partnerGender ?? s.aiGender ?? "";
-  const age = Number(s.age ?? s.partnerAge ?? s.aiAge ?? "") || null;
-  const job = s.job ?? s.partnerJob ?? s.aiJob ?? "";
-  const msgCount = s.messageCount ?? s.msgCount ?? s.totalMessages ?? 0;
-  const date = toYmdDot(
-    s.createdAt ?? s.created_at ?? s.startedAt ?? Date.now()
+  const toNum = (v) => {
+    if (v === null || v === undefined || v === "") return null;
+    const n = Number(v);
+    return Number.isFinite(n) ? n : null;
+  };
+
+  // 세션 내 보조 위치들
+  const c = s.condition || s.conditions || {};
+  const a = s.analysis || s.lastAnalysis || {};
+
+  // Analysis 화면에서 저장해둔 로컬 캐시(있으면 사용)
+  const cache =
+    (() => {
+      try {
+        return JSON.parse(
+          localStorage.getItem(`analysisCache.${id}`) || "null"
+        );
+      } catch {
+        return null;
+      }
+    })() || {};
+
+  const genderRaw = pick(
+    s.gender,
+    s.partnerGender,
+    s.aiGender,
+    c.aiGender,
+    a.partnerGender,
+    a.gender,
+    cache.partnerGender,
+    cache.gender,
+    cache.aiGender
+  );
+  const ageRaw = pick(
+    s.age,
+    s.partnerAge,
+    s.aiAge,
+    c.aiAge,
+    a.partnerAge,
+    a.age,
+    cache.partnerAge,
+    cache.age,
+    cache.aiAge
+  );
+  const jobRaw = pick(
+    s.job,
+    s.partnerJob,
+    s.aiJob,
+    c.aiJob,
+    a.partnerJob,
+    a.job,
+    cache.partnerJob,
+    cache.job,
+    cache.aiAge
   );
 
-  const summaryRaw = s.summary ?? s.oneLiner ?? s.oneLineSummary ?? null;
-  const tagRaw = s.tag ?? s.partnerTrait ?? null;
-  const summary =
-    typeof summaryRaw === "string" && summaryRaw.trim()
-      ? summaryRaw.trim()
-      : null;
-  const tag =
-    typeof tagRaw === "string" && tagRaw.trim() ? tagRaw.trim() : null;
+  const msgCount =
+    pick(
+      s.messageCount,
+      s.msgCount,
+      s.totalMessages,
+      s.message_count,
+      s.messages?.length,
+      s.chatLogs?.length
+    ) ?? 0;
+
+  const liked =
+    pick(
+      s.favorability,
+      s.likeability,
+      s.likeabilityScore,
+      s.favorabilityScore,
+      a.favorability,
+      a.likeability,
+      a.likeabilityScore,
+      a.favorabilityScore,
+      cache.favorabilityScore,
+      cache.likeabilityScore,
+      cache.likeability
+    ) ?? null;
+
+  const total =
+    pick(
+      s.totalScore,
+      s.overallScore,
+      a.totalScore,
+      a.overallScore,
+      cache.totalScore,
+      cache.overallScore
+    ) ?? null;
+
+  const summaryRaw = pick(
+    s.summary,
+    s.oneLiner,
+    s.oneLineSummary,
+    a.oneLiner,
+    a.summary,
+    cache.oneLiner,
+    cache.summary
+  );
+  const tagRaw = pick(s.tag, s.partnerTrait, a.partnerTrait, cache.partnerTrait);
+
+  const date = toYmdDot(s.createdAt ?? s.created_at ?? s.startedAt ?? Date.now());
 
   return {
     id,
     name: `${partner}님과의 대화`,
-    liked, // null 가능
-    total, // null 가능
-    gender:
-      gender === "male" ? "남자" : gender === "female" ? "여자" : String(gender || "-"),
-    age,
-    job,
+    liked,
+    total,
+    gender: toKorGender(genderRaw),
+    age: toNum(ageRaw),
+    job: jobRaw || "-",
     msgCount,
     date,
-    summary, // null 가능
-    tag, // null 가능
+    summary:
+      typeof summaryRaw === "string" && summaryRaw.trim() ? summaryRaw.trim() : null,
+    tag: typeof tagRaw === "string" && tagRaw.trim() ? tagRaw.trim() : null,
   };
 }
 
@@ -98,26 +185,32 @@ export default function MyPage() {
   const navigate = useNavigate();
 
   const [profile, setProfile] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(true);
+
   const [draftNick, setDraftNick] = useState("");
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedOpen, setSavedOpen] = useState(false);
 
   const [recent, setRecent] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
 
-  // 프로필
+  // 프로필 불러오기
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const { data } = await getMe(); // { usNickname, usEmail, ... }
+        const { data } = await getMe(); // 쿠키 기반 인증
         if (!alive) return;
         const p = normalizeProfile(data);
         setProfile(p);
         setDraftNick(p.nickname || "");
       } catch (e) {
         console.error("[mypage] getMe fail:", e);
+        if (!alive) return;
+        setProfile(null);
+      } finally {
+        if (alive) setProfileLoading(false);
       }
     })();
     return () => {
@@ -140,7 +233,7 @@ export default function MyPage() {
         if (!alive) return;
         setRecent([]);
       } finally {
-        if (alive) setLoading(false);
+        if (alive) setSessionsLoading(false);
       }
     })();
     return () => {
@@ -148,9 +241,6 @@ export default function MyPage() {
     };
   }, []);
 
-  /* ===== 통계(서버가 준 값만 집계) =====
-     - 평균 호감도: liked !== null 인 항목만
-     - 평균 총점: total !== null 인 항목만 */
   const stats = useMemo(() => {
     const likes = recent.map((r) => r.liked).filter((v) => v != null);
     const totals = recent.map((r) => r.total).filter((v) => v != null);
@@ -166,7 +256,6 @@ export default function MyPage() {
     return { total: recent.length, avgLiked, avgTotal };
   }, [recent]);
 
-  // 닉네임 편집
   const startEdit = () => setEditing(true);
   const cancelEdit = () => {
     setDraftNick(profile?.nickname || "");
@@ -206,7 +295,9 @@ export default function MyPage() {
             </HeadLeft>
             <HeadRight>
               {!editing ? (
-                <LightBtn onClick={startEdit}>✏️ 닉네임 수정</LightBtn>
+                <LightBtn onClick={startEdit} disabled={!profile || profileLoading}>
+                  ✏️ 닉네임 수정
+                </LightBtn>
               ) : (
                 <>
                   <PrimaryBtn onClick={saveEdit} disabled={saving}>
@@ -220,8 +311,16 @@ export default function MyPage() {
             </HeadRight>
           </CardHead>
 
-          {!profile ? (
-            <Dim>불러오는 중...</Dim>
+          {profileLoading ? (
+            <Dim>프로필정보 불러오는 중...</Dim>
+          ) : !profile ? (
+            <Dim>
+              로그인이 필요합니다.
+              <br />
+              <LightBtn onClick={() => navigate("/login")} style={{ marginTop: 8 }}>
+                로그인 하러가기
+              </LightBtn>
+            </Dim>
           ) : (
             <FormGrid>
               <Field>
@@ -232,7 +331,7 @@ export default function MyPage() {
                     onChange={(e) => setDraftNick(e.target.value)}
                   />
                 ) : (
-                  <Value>{profile.nickname}</Value>
+                  <Value>{profile.nickname || "-"}</Value>
                 )}
               </Field>
 
@@ -251,7 +350,7 @@ export default function MyPage() {
               </Field>
 
               <Field>
-                <Label>나이</Label>
+                <Label>나이 / 생일</Label>
                 <Value title="서버가 나이(usAge/age) 또는 생일(birth/birthDate)을 줄 수 있어요">
                   {profile.birth
                     ? /^\d+$/.test(String(profile.birth))
@@ -276,7 +375,7 @@ export default function MyPage() {
             </HeadRight>
           </CardHead>
 
-          {loading ? (
+          {sessionsLoading ? (
             <Dim>불러오는 중...</Dim>
           ) : recent.length === 0 ? (
             <Dim>최근 대화가 없어요.</Dim>
@@ -366,7 +465,6 @@ export default function MyPage() {
         </Card>
       </Wrap>
 
-      {/* 저장 완료 모달 */}
       {savedOpen && (
         <Toast>
           <ToastInner>저장되었습니다.</ToastInner>
@@ -467,7 +565,6 @@ const Dim = styled.div`
   color: #777;
 `;
 
-/* 프로필 */
 const FormGrid = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;

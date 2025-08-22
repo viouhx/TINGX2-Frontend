@@ -4,17 +4,11 @@ import { useNavigate, Link } from "react-router-dom";
 import styled from "styled-components";
 import { signIn, getMe } from "../api/auth";
 
-// 🔑 백엔드 베이스 URL (http.js와 동일한 규칙으로 해석)
-//   - REACT_APP_API_BASE 가 있으면 그걸 쓰고
-//   - 없으면 REACT_APP_API_BASE_URL
-//   - 둘 다 없으면 로컬 8080 추정
 const API_BASE =
   process.env.REACT_APP_API_BASE ||
   process.env.REACT_APP_API_BASE_URL ||
   window.location.origin.replace(/:\d+$/, ":8080");
 
-// 🌐 소셜 로그인: 스프링 시큐리티 기본 엔드포인트로 리다이렉트
-//   /oauth2/authorization/{registrationId}
 const socialLogin = (provider) => {
   window.location.href = `${API_BASE}/oauth2/authorization/${provider}`;
 };
@@ -36,23 +30,26 @@ const Login = ({ onLogin }) => {
 
     try {
       setLoading(true);
-    // 1) 일반 로그인
-     const { data } = await signIn({ email, password });
-     // ✅ 토큰이 응답에 있으면 저장 (http.js 인터셉터가 이후 요청에 자동 부착)
-     const token = data?.accessToken || data?.token || data?.access_token;
-     if (token) {
-       localStorage.setItem("accessToken", token);
-     }  
 
-      // 2) (선택) 로그인 직후 내 정보 확인
-      try {
-        const { data } = await getMe();
-        console.log("ME:", data);
-      } catch (err) {
-        console.warn("getMe failed (optional):", err?.response || err);
+      // 1) 일반 로그인
+      const { data } = await signIn({ email, password });
+
+      // (옵션) 바디로 토큰이 오면 저장 — 서버가 쿠키로도 심고 있으니 없어도 됨
+      const token = data?.accessToken || data?.token || data?.access_token;
+      if (token) {
+        localStorage.setItem("accessToken", token);
       }
 
-      // 3) 상위 상태 갱신 + 메인 이동
+      // (옵션) 즉시 내 정보 확인 — 실패해도 무시
+      try {
+        const me = await getMe();
+        console.log("ME:", me.data);
+      } catch {}
+
+      // ✅ 헤더에게 “로그인 상태 바뀜” 알림 → Navigation이 getMe() 재호출
+      window.dispatchEvent(new Event("auth:changed"));
+
+      // 상위 상태 갱신 + 이동
       onLogin?.();
       navigate("/main");
     } catch (err) {
@@ -111,7 +108,6 @@ const Login = ({ onLogin }) => {
 
         <Divider />
 
-        {/* ✅ 구글/네이버 소셜 로그인 (리다이렉트 방식) */}
         <SocialBtn type="button" onClick={() => socialLogin("google")} disabled={loading}>
           <span style={{ fontWeight: 700 }}>G</span>&nbsp; Continue with Google
         </SocialBtn>
@@ -124,6 +120,9 @@ const Login = ({ onLogin }) => {
 };
 
 export default Login;
+
+/* styles ... 그대로 */
+
 
 /* ===== styles ===== */
 const Bg = styled.main`

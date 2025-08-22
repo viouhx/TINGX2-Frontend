@@ -4,9 +4,7 @@ import { Client } from "@stomp/stompjs";
 import SockJS from "sockjs-client";
 
 // ---- 환경 변수 (필요 시 .env.* 에서 덮어쓰기) ----
-const RAW_WS_URL =
-   process.env.REACT_APP_WS_URL ||
-   `${window.location.origin.replace(/:\d+$/, ":8080")}/ws`;
+const RAW_WS_URL = process.env.REACT_APP_WS_URL || "/ws"; // 상대경로
 
 // 토픽 프리픽스와 발행 경로도 오버라이드 가능하게
 const TOPIC_PREFIX = process.env.REACT_APP_WS_TOPIC_PREFIX || "/topic/chat";
@@ -14,11 +12,11 @@ const APP_DEST     = process.env.REACT_APP_WS_APP_DEST     || "/app/send";
 
 // /ws 로 끝나면 /chat 자동 덧붙임
 function resolveWSUrl(raw) {
-   let u = String(raw || "").trim();
-   if (!u) u = `${window.location.origin.replace(/:\d+$/, ":8080")}/ws`;
-   if (u.endsWith("/ws")) u += "/chat";   // ★ 유지: 서버가 /ws/chat 로 열려있을 때 대응
-   return u.replace(/\/+$/, "");          // 끝의 / 정리
- }
+  let u = String(raw || "").trim();
+  if (!u) u = "/ws";
+  if (u.endsWith("/ws")) u += "/chat";
+  return u.replace(/\/+$/, "");
+}
 
 export const WS_URL = resolveWSUrl(RAW_WS_URL);
 

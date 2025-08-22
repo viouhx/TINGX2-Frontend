@@ -2,7 +2,7 @@
 import React, { useEffect, useState } from "react";
 import styled from "styled-components";
 import { useLocation, useNavigate } from "react-router-dom";
-import { requestAnalysis } from "../api/chat";
+import { requestAnalysis, fetchAnalysis } from "../api/chat";
 
 /* API → UI 필드 표준화:
    - 백엔드 스키마가 바뀌거나 키 이름이 달라도 여기서 한 번에 흡수 */
@@ -88,20 +88,53 @@ export default function Analysis() {
   // 마운트 시 분석 요청
   useEffect(() => {
     if (!sessionId) return; // 세션 없으면 빈 화면 UX
-    let alive = true;
-    (async () => {
-      try {
-        const { data: api } = await requestAnalysis(sessionId);
-        if (!alive) return;
-        // 받아온 응답을 표준화해서 병합
-        setData((prev) => ({ ...prev, ...normalizeAnalysis(api) }));
-      } catch (e) {
-        console.error("[analysis] request failed:", e);
-      } finally {
-        if (alive) setLoading(false);
-      }
-    })();
-    return () => { alive = false; };
+    let cancelled = false;
+   (async () => {
+     try {
+       // 1) 오래 걸릴 수 있으니 timeout 늘린 POST
+       const res = await requestAnalysis(sessionId);
+       // 서버가 { success, message, data: {...} } 형태로 줄 수 있으니 언래핑
+       const payload = res?.data?.data ?? res?.data ?? {};
+       if (!cancelled && Object.keys(payload || {}).length) {
+   const normalized = normalizeAnalysis(payload);
+   setData(prev => ({ ...prev, ...normalized }));
+   // ✅ 세션별 캐시 (원본 payload를 넣어두면 성별/나이/직업 키도 같이 보존)
+   try {
+     localStorage.setItem(`analysisCache.${sessionId}`, JSON.stringify(payload));
+   } catch {}
+   setLoading(false);
+   return;
+ }
+     } catch (e) {
+       // axios timeout 등은 'canceled'처럼 보일 수 있음 → 폴백으로 넘어감
+       console.warn("[analysis] POST fallback to GET:", e?.message || e);
+     }
+
+     // 2) 폴백: 이미 DB에 저장된 결과를 짧게 여러 번 조회
+     try {
+       for (let i = 0; i < 3 && !cancelled; i++) {
+         const { data: got } = await fetchAnalysis(sessionId);
+         const payload = got?.data ?? got ?? {};
+         if (Object.keys(payload || {}).length) {
+           if (!cancelled) {
+             setData(prev => ({ ...prev, ...normalizeAnalysis(payload) }));
+           }
+           // ✅ 폴백으로 받아온 결과도 캐시에 저장해야 마이페이지에서 바로 보임
+  try {
+    localStorage.setItem(`analysisCache.${sessionId}`, JSON.stringify(payload));
+  } catch {}
+           break;
+         }
+         // 잠깐 대기 후 재시도
+         await new Promise(r => setTimeout(r, 1500));
+       }
+     } catch (e) {
+       console.error("[analysis] GET fetch failed:", e);
+     } finally {
+       if (!cancelled) setLoading(false);
+     }
+   })();
+   return () => { cancelled = true; };
   }, [sessionId]);
 
   const { name, likeScore, quote, flow, partnerTraits, myStyle, strengths, improvements, cats, overall } = data;
