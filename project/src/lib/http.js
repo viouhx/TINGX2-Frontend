@@ -1,42 +1,31 @@
 // src/lib/http.js
 import axios from "axios";
 
+// 1) 환경변수에서 베이스 URL 읽기 (CRA는 REACT_APP_ 접두사 필수)
+const API_BASE =
+  process.env.REACT_APP_API_BASE || ""; // 예: https://tingting.shop/api  또는 https://api.tingting.shop
+
+// 2) axios 인스턴스
 const http = axios.create({
-  baseURL: "", // ★ 항상 상대경로. 절대 금지
-  withCredentials: true,
+  baseURL: API_BASE,           // ★ 절대 URL 그대로 사용
+  withCredentials: true,       // 쿠키/세션 사용 시
   headers: { "Content-Type": "application/json" },
   timeout: 15000,
 });
 
-// ★ 절대 URL을 강제로 상대경로로 변환하는 방어막
+// 3) 요청 인터셉터: 토큰만 붙이고, 절대 URL은 건드리지 않음
 http.interceptors.request.use((config) => {
-  // baseURL에 절대주소가 들어오면 제거
-  if (/^https?:\/\//i.test(config.baseURL || "")) {
-    config.baseURL = "";
-  }
-  // url이 절대주소면 path(+query/hash)만 남기기
-  if (/^https?:\/\//i.test(config.url || "")) {
-    try {
-      const u = new URL(config.url);
-      config.url = u.pathname + u.search + u.hash;
-    } catch {
-      // URL 파싱 실패 시 그대로 둡니다.
-    }
-  }
-
-  // (선택) 최종 확인 로그 — 문제 추적용. 되도록 잠깐만 사용.
-  // console.log("[REQ]", { baseURL: config.baseURL, url: config.url });
-
-  // 토큰 헤더(있을 때만)
-  const token =
-    localStorage.getItem("accessToken") ||
-    sessionStorage.getItem("accessToken");
-  if (token && !config.headers.Authorization) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
+  // (선택) 토큰 헤더
+ // const token =
+    //localStorage.getItem("accessToken") ||
+    //sessionStorage.getItem("accessToken");
+  //if (token && !config.headers.Authorization) {
+    //config.headers.Authorization = `Bearer ${token}`;
+  //}
   return config;
 });
 
+// 4) 응답 인터셉터: 에러 로깅
 http.interceptors.response.use(
   (res) => res,
   (err) => {

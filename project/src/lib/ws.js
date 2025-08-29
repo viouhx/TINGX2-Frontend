@@ -35,7 +35,8 @@ export function createStompClient({ url = WS_URL, onConnect, onError }) {
         },
       }),
     // 서버가 STOMP CONNECT에서 Authorization 검사하는 경우 대비
-    connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
+    // 쿠키 기반 인증만 사용 (connectHeaders 제거)
+    //connectHeaders: token ? { Authorization: `Bearer ${token}` } : {},
     reconnectDelay: 2000,
     onConnect,
     onStompError: (frame) => {
