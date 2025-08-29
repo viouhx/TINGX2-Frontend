@@ -14,6 +14,7 @@ import {
  * - isLoggedIn: (현재 디자인엔 영향 X)
  */
 export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLoggedIn }) {
+  const lastSentRef = useRef(0); //수정사항
   const navigate = useNavigate();
   const { state } = useLocation();
   const sessionId = state?.sessionId ?? null;       // 메인에서 넘겨준 세션
@@ -41,8 +42,16 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
   const msgs = useMemo(() => (extMsgs ?? intMsgs), [extMsgs, intMsgs]);
   const setMsgs = useMemo(() => (setExtMsgs ?? setIntMsgs), [setExtMsgs]);
 
+  //const handleKeyDown = (e) => {
+    //if (e.key === "Enter" && !e.shiftKey) {
+      //e.preventDefault();
+      //handleSend();
+    //}
+  //};
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
+      // 한글 IME 조합 중이면 전송 금지
+      if (e.isComposing || e.nativeEvent?.isComposing) return;
       e.preventDefault();
       handleSend();
     }
@@ -149,6 +158,10 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
   /* ===== 메시지 전송 ===== */
   const handleSend = (e) => {
     e?.preventDefault?.();
+    // 더블 엔터/더블 클릭 방지
+    const now = Date.now(); //수정사항
+    if (now - (lastSentRef.current || 0) < 300) return;
+    lastSentRef.current = now;
     if (ended) return; // ★ 종료 후 전송 불가
 
     const text = input.trim();
@@ -179,20 +192,8 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
       setTyping(true); // 서버 응답 대기 UI
       sendMessage(clientRef.current, normalizeWSSend({ sessionId, text }));
     } else {
-      // 오프라인(WS 미연결)
-      setTyping(true);
-      setTimeout(() => {
-        setTyping(false);
-        setMsgs((prev) => [
-          ...prev,
-          {
-            id: Date.now() + 1,
-            role: "ai",
-            text: "(WS 미연결) 더미 응답입니다. 서버 연결 후 실시간 메시지가 표시됩니다.",
-            ts: new Date(),
-          },
-        ]);
-      }, 1000);
+      // 오프라인이면 더미 메시지 추가 금지
+      console.warn("WS 미연결: 메시지 전송 불가");
     }
   };
 
