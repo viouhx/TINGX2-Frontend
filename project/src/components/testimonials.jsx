@@ -66,23 +66,6 @@ export function Testimonials({ messages: extMsgs, setMessages: setExtMsgs, isLog
     return ((code - 0xac00) % 28) !== 0;
   };
 
-  // 최초 AI 인사 메시지
-  useEffect(() => {
-    if (!msgs || msgs.length === 0) {
-      setMsgs([
-        {
-          id: Date.now(),
-          role: "ai",
-          text:
-            initialHello ||
-            `안녕하세요! ${opponent.name}${hasJong(opponent.name) ? "이에요" : "예요"}. 어떤 이야기부터 시작할까요?`,
-          ts: new Date(),
-        },
-      ]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // 세션 발화 제한(10) 현재 카운트 로드
   const PER_SESSION_LIMIT = 10;
   const sessionCountKey = sessionId ? `tt_session_${sessionId}_sent` : null;
